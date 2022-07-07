@@ -12,6 +12,11 @@
 #include "image.h"
 #include "decoder.h"
 #include "img_scanner.h"
+//#include <android/log.h>
+//
+//#define  TAG    "VR_CODE"
+//#define LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG,TAG,__VA_ARGS__) // 定义LOGD类型
+//#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR,TAG ,__VA_ARGS__) // 定义LOGE类型
 
 static int text_is_ascii(const unsigned char *_text,int _len){
   int i;
@@ -56,17 +61,17 @@ int qr_code_data_list_extract_text(const qr_code_data_list *_qrlist,
   mark=(unsigned char *)calloc(nqrdata,sizeof(*mark));
   ntext=0;
   /*This is the encoding the standard says is the default.*/
-  //latin1_cd=iconv_open("UTF-8","ISO8859-1");
-  /*But this one is often used, as well.*/
-  //sjis_cd=iconv_open("UTF-8","SJIS");
-  /*This is a trivial conversion just to check validity without extra code.*/
-  //utf8_cd=iconv_open("UTF-8","UTF-8");
+//  latin1_cd=iconv_open("UTF-8","ISO8859-1");
+//  /*But this one is often used, as well.*/
+//  sjis_cd=iconv_open("UTF-8","SJIS");
+//  /*This is a trivial conversion just to check validity without extra code.*/
+//  utf8_cd=iconv_open("UTF-8","UTF-8");
     /**
      * todo edit start.
      */
-    latin1_cd=iconv_open("GBK","UTF-8");
+    latin1_cd=iconv_open("UTF-8","GBK");
     /*But this one is often used, as well.*/
-    sjis_cd=iconv_open("GBK2312","UTF-8");
+    sjis_cd=iconv_open("UTF-8","GBK2312");
     /*This is a trivial conversion just to check validity without extra code.*/
     utf8_cd=iconv_open("UTF-8","UTF-8");
     /**
@@ -127,7 +132,8 @@ int qr_code_data_list_extract_text(const qr_code_data_list *_qrlist,
         int shift;
         entry=qrdataj->entries+k;
         shift=0;
-        switch(entry->mode){
+        qr_mode modeTest = QR_MODE_BYTE;//todo 强制设置为QR_MODE_BYTE
+        switch(modeTest){
           /*FNC1 applies to the entire code and ignores subsequent markers.*/
           case QR_MODE_FNC1_1ST:{
             if(!fnc1)fnc1=MOD(ZBAR_MOD_GS1);
@@ -216,7 +222,8 @@ int qr_code_data_list_extract_text(const qr_code_data_list *_qrlist,
         char               *in;
         char               *out;
         entry=qrdataj->entries+k;
-        switch(entry->mode){
+        qr_mode modeTest = QR_MODE_BYTE;//todo 强制设置为QR_MODE_BYTE
+        switch(modeTest){
           case QR_MODE_NUM:{
             if(sa_ctext-sa_ntext>=(size_t)entry->payload.data.len){
               memcpy(sa_text+sa_ntext,entry->payload.data.buf,
@@ -270,6 +277,7 @@ int qr_code_data_list_extract_text(const qr_code_data_list *_qrlist,
             out=sa_text+sa_ntext;
             outleft=sa_ctext-sa_ntext;
             /*If we have no specified encoding, attempt to auto-detect it.*/
+//            LOGD("------------------------------------------eci %d",eci);
             if(eci<0){
               int ei;
               /*If there was data encoded in kanji mode, assume it's SJIS.*/

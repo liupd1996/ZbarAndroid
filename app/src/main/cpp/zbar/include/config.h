@@ -3,25 +3,25 @@
 #define HAVE_LANGINFO_CODESET 0
 
 /* whether to build support for Code 128 symbology */
-#define ENABLE_CODE128 1
+#undef ENABLE_CODE128 1
 
 /* whether to build support for Code 93 symbology */
-#define ENABLE_CODE93 1
+#undef ENABLE_CODE93 1
 
 /* whether to build support for Code 39 symbology */
-#define ENABLE_CODE39 1
+#undef ENABLE_CODE39 1
 
 /* whether to build support for Codabar symbology */
-#define ENABLE_CODABAR 1
+#undef ENABLE_CODABAR 1
 
 /* whether to build support for DataBar symbology */
-#define ENABLE_DATABAR 1
+#undef ENABLE_DATABAR 1
 
 /* whether to build support for EAN symbologies */
-#define ENABLE_EAN 1
+#undef ENABLE_EAN 1
 
 /* whether to build support for Interleaved 2 of 5 symbology */
-#define ENABLE_I25 1
+#undef ENABLE_I25 1
 
 /* whether to build support for PDF417 symbology */
 #undef ENABLE_PDF417

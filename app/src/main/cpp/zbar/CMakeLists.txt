@@ -18,23 +18,32 @@ add_library(${PROJECT_NAME} SHARED
 			zbar/refcnt.c
 			zbar/video.c
 			zbar/video/null.c
-			zbar/decoder/code128.c
-			zbar/decoder/code39.c
-			zbar/decoder/code93.c
-			zbar/decoder/codabar.c
-			zbar/decoder/databar.c
-			zbar/decoder/ean.c
-			zbar/decoder/i25.c
+#			zbar/decoder/code128.c
+#			zbar/decoder/code39.c
+#			zbar/decoder/code93.c
+#			zbar/decoder/codabar.c
+#			zbar/decoder/databar.c
+#			zbar/decoder/ean.c
+#			zbar/decoder/i25.c
 			zbar/decoder/qr_finder.c
 			zbar/qrcode/bch15_5.c
 			zbar/qrcode/binarize.c
 			zbar/qrcode/isaac.c
 			zbar/qrcode/qrdec.c
+#		zbar/qrcode/decode.c
 			zbar/qrcode/qrdectxt.c
 			zbar/qrcode/rs.c
 			zbar/qrcode/util.c)
 
+find_library( # Sets the name of the path variable.
+              log-lib
+
+              # Specifies the name of the NDK library that
+              # you want CMake to locate.
+              log )
+
 target_link_libraries(${PROJECT_NAME}
-						iconv)
+						iconv
+						${log-lib})
 
 

@@ -14,6 +14,11 @@
 #include "binarize.h"
 #include "image.h"
 #include "svg.h"
+//#include <android/log.h>
+
+//#define  TAG    "VR_CODE"
+//#define LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG,TAG,__VA_ARGS__) // 定义LOGD类型
+//#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR,TAG ,__VA_ARGS__) // 定义LOGE类型
 
 typedef int qr_line[3];
 
@@ -33,6 +38,11 @@ typedef struct qr_pack_buf      qr_pack_buf;
 /*The number of bits in an int.
   Note the cast to (int): this prevents this value from "promoting" whole
    expressions to an (unsigned) size_t.*/
+/*整数中的位数。
+
+注意强制转换为（int）：这会阻止该值“提升”整体
+
+表达式的大小为（无符号）*/
 #define QR_INT_BITS    ((int)sizeof(int)*CHAR_BIT)
 #define QR_INT_LOGBITS (QR_ILOG(QR_INT_BITS))
 
@@ -145,6 +155,94 @@ struct qr_finder_center{
   /*The number of edge points from the crossing lines.*/
   int                nedge_pts;
 };
+
+int IntegerToBinary(int number, char ret[], int N)
+{
+    unsigned int index;
+    int i=0;
+//    int N=sizeof(int)*CHAR_BIT;          //获取int类型的位数, CHAR_BIT为limit.h定义的宏，为CHAR的位数
+//    if (ret_len < N)
+//    {
+//        return 0;
+//    }
+
+//高位往低位
+//    index = 1<<(N-1);                         //将1循环左移N-1次
+//    for (i=0; i<N; ++i)
+//    {
+//        ret[i] = ((number&index)==0)?'0':'1'; //将需要求值的整型数与index按位相“与”，从最高位起判断是否为1
+//        index >>= 1;                          //将index值循环右移
+//    }
+
+//低位往高位
+    index = 1;
+    for (i=0; i<N; ++i)
+    {
+        ret[i] = ((number&index)==0)?' ':'X';//0用空格表示,1用X表示.
+        index <<= 1;
+    }
+    return 1;
+}
+
+int IntegerToBinary2(unsigned number, char ret[],int N)
+{
+    unsigned int index;
+    int i=0;
+    //int N=sizeof(int)*CHAR_BIT;          //获取int类型的位数, CHAR_BIT为limit.h定义的宏，为CHAR的位数
+
+//高位往低位
+    index = 1<<(N-1);                         //将1循环左移N-1次
+    for (i=0; i<N; ++i)
+    {
+        ret[i] = ((number&index)==0)?'0':'1'; //将需要求值的整型数与index按位相“与”，从最高位起判断是否为1
+        index >>= 1;                          //将index值循环右移
+    }
+    return 1;
+}
+
+int Char2Binary(uint8_t code) {
+    char *c1;
+    c1 = malloc(8);
+    memset(c1, 0, 8);
+    unsigned int index;
+    int i = 0;
+    index = 1 << (8 - 1);
+    for (i = 0; i < 8; ++i) {
+        c1[i] = ((code & index) == 0) ? '0' : '1'; //将需要求值的整型数与index按位相“与”，从最高位起判断是否为1
+        index >>= 1;                          //将index值循环右移
+    }
+    //LOGD("===============================================Char2Binary: %s ", c1);
+    return 1;
+}
+
+static int FindApproxiateDimension(int dimension)
+{
+  int dims[] = {50,58,66,74,82,90,98,106};
+  int i,j=0;
+  int min = 10;
+
+  for (i = 0; i < 8; i++)
+  {
+    if (abs(dimension - dims[i]) < min)
+    {
+      min = abs(dimension - dims[i]);
+      j = i;
+    }
+  }
+  return dims[j];
+}
+
+//Get the data bytes each dimension and errLevel
+static int GetTotalCodeWords(int errLevel, int versionNumber)
+{
+    int ECC_TAB[16] = {50,32,64,40,77,48,90,56,102,64,115,72,128,80,141,88};   //20220401
+
+    return ECC_TAB[versionNumber * 2 + errLevel];
+}
+
+static int GetVersionNum(int dim) {//todo 修改。暂用
+    return (dim - 50)/8;
+}
 
 
 static int qr_finder_vline_cmp(const void *_a,const void *_b){
@@ -682,6 +780,11 @@ static void qr_aff_project(qr_point _p,const qr_aff *_aff,
 /*A full homography.
   Like the affine homography, this maps from the image (at subpel resolution)
    to a square domain with power-of-two sides (of res bits) and back.*/
+/*完全单应。
+
+与仿射单应性一样，它从图像映射（以子像素分辨率）
+
+到一个平方域，两边的幂（res位）和后面的幂*/
 struct qr_hom{
   int fwd[3][2];
   int inv[3][2];
@@ -840,8 +943,10 @@ static void qr_hom_project(qr_point _p,const qr_hom *_hom,
    configuration.*/
 struct qr_finder{
   /*The module size along each axis (in the square domain).*/
+    /*沿每个轴的模块大小（在方形域中）*/
   int                size[2];
   /*The version estimated from the module size along each axis.*/
+    /*根据每个轴上的模块大小估计的版本*/
   int                eversion[2];
   /*The list of classified edge points for each edge.*/
   qr_finder_edge_pt *edge_pts[4];
@@ -850,9 +955,14 @@ struct qr_finder{
   /*The number of inliers found after running RANSAC on each edge.*/
   int                ninliers[4];
   /*The center of the finder pattern (in the square domain).*/
+    /*查找器图案的中心（在正方形区域中）*/
   qr_point           o;
   /*The finder center information from the original image.*/
+    /*取景器将原始图像中的信息集中*/
   qr_finder_center  *c;
+
+    /*预估的尺寸大小.*/
+  int dim[2];
 };
 
 
@@ -897,6 +1007,11 @@ static void qr_finder_edge_pts_aff_classify(qr_finder *_f,const qr_aff *_aff){
    (in the square domain).
   The resulting list of edge points is sorted by edge index, with ties broken
    by extent.*/
+/*计算每个边点所属的边的索引及其（有符号）
+沿相应轴与取景器图案中心的距离
+（在平方域中）。
+生成的边缘点列表按边缘索引排序，并断开连接
+按范围*/
 static void qr_finder_edge_pts_hom_classify(qr_finder *_f,const qr_hom *_hom){
   qr_finder_center *c;
   int               i;
@@ -940,8 +1055,12 @@ static void qr_finder_edge_pts_hom_classify(qr_finder *_f,const qr_hom *_hom){
 /*Estimates the size of a module after classifying the edge points.
   _width:  The distance between UL and UR in the square domain.
   _height: The distance between UL and DL in the square domain.*/
+/*在对边缘点进行分类后，估计模块的大小。
+_宽度：平方域中UL和UR之间的距离。
+_高度：平方域中UL和DL之间的距离*/
 static int qr_finder_estimate_module_size_and_version(qr_finder *_f,
  int _width,int _height){
+    //LOGD("_width %d, _height %d" , _width, _height);
   qr_point offs;
   int      sums[4];
   int      nsums[4];
@@ -960,6 +1079,7 @@ static int qr_finder_estimate_module_size_and_version(qr_finder *_f,
     int                n;
     int                i;
     /*Average the samples for this edge, dropping the top and bottom 25%.*/
+          /*将此边缘的样本平均，顶部和底部下降25%*/
     edge_pts=_f->edge_pts[e];
     n=_f->nedge_pts[e];
     sum=0;
@@ -969,10 +1089,14 @@ static int qr_finder_estimate_module_size_and_version(qr_finder *_f,
     offs[e>>1]+=mean;
     sums[e]=sum;
     nsums[e]=n;
+//    LOGD("-------------------------------sum %d, n %d , e %d " , sum , n , e);
   }
   else nsums[e]=sums[e]=0;
   /*If we have samples on both sides of an axis, refine our idea of where the
      unprojected finder center is located.*/
+    /*如果我们在一个轴的两侧都有样本，那么我们可以对样本的位置进行细化
+
+  未投影的查找中心位于*/
   if(_f->nedge_pts[0]>0&&_f->nedge_pts[1]>0){
     _f->o[0]-=offs[0]>>1;
     sums[0]-=offs[0]*nsums[0]>>1;
@@ -986,29 +1110,43 @@ static int qr_finder_estimate_module_size_and_version(qr_finder *_f,
   /*We must have _some_ samples along each axis... if we don't, our transform
      must be pretty severely distorting the original square (e.g., with
      coordinates so large as to cause overflow).*/
+  /*我们必须在每个轴上有一些样品。。。如果我们不这样做，我们的转变
+  必须非常严重地扭曲原始正方形（例如
+  坐标大到导致溢出）*/
   nusize=nsums[0]+nsums[1];
-  if(nusize<=0)return -1;
+  //if(nusize<=0)return -1;
   /*The module size is 1/3 the average edge extent.*/
   nusize*=3;
   usize=sums[1]-sums[0];
   usize=((usize<<1)+nusize)/(nusize<<1);
-  if(usize<=0)return -1;
+  //if(usize<=0)return -1;
   /*Now estimate the version directly from the module size and the distance
      between the finder patterns.
     This is done independently using the extents along each axis.
     If either falls significantly outside the valid range (1 to 40), reject the
      configuration.*/
-  uversion=(_width-8*usize)/(usize<<2);
-  if(uversion<1||uversion>40+QR_LARGE_VERSION_SLACK)return -1;
+  /*现在直接从模块大小和距离估计版本
+  在查找器模式之间。
+  这是使用沿每个轴的范围独立完成的。
+  如果其中一个明显超出有效范围（1到40），则拒绝
+  配置*/
+  uversion=(_width-8*usize)/(usize<<2); //(dim-8-9 /4) = version
+  int udim = (_width+8*usize)/(usize);
+  //  LOGD("-------------------------------- usize %d uversion %d nusize%d udim %d" , usize , uversion , nusize, (_width+8*usize)/(usize));//todo + 9
+  //if(uversion<1||uversion>40+QR_LARGE_VERSION_SLACK)return -1;
   /*Now do the same for the other axis.*/
   nvsize=nsums[2]+nsums[3];
-  if(nvsize<=0)return -1;
+  //if(nvsize<=0)return -1;
   nvsize*=3;
   vsize=sums[3]-sums[2];
   vsize=((vsize<<1)+nvsize)/(nvsize<<1);
-  if(vsize<=0)return -1;
+  //if(vsize<=0)return -1;
   vversion=(_height-8*vsize)/(vsize<<2);
-  if(vversion<1||vversion>40+QR_LARGE_VERSION_SLACK)return -1;
+  int vdim = (_height+8*vsize)/(vsize);
+  //  LOGD("-------------------------------- vsize %d vversion %d nvsize%d vdim %d" , vsize , vversion , nvsize,(_height+8*vsize)/(vsize));
+    _f->dim[0] = udim;
+    _f->dim[1] = vdim;
+  //if(vversion<1||vversion>40+QR_LARGE_VERSION_SLACK)return -1;
   /*If the estimated version using extents along one axis is significantly
      different than the estimated version along the other axis, then the axes
      have significantly different scalings (relative to the grid).
@@ -1020,7 +1158,7 @@ static int qr_finder_estimate_module_size_and_version(qr_finder *_f,
       X....  UR....
     Such a configuration might even pass any other geometric checks if we
      didn't reject it here.*/
-  if(abs(uversion-vversion)>QR_LARGE_VERSION_SLACK)return -1;
+  //if(abs(uversion-vversion)>QR_LARGE_VERSION_SLACK)return -1;
   _f->size[0]=usize;
   _f->size[1]=vsize;
   /*We intentionally do not compute an average version from the sizes along
@@ -1319,6 +1457,9 @@ static int qr_hamming_dist(unsigned _y1,unsigned _y2,int _maxdiff){
 
 /*Retrieve a bit (guaranteed to be 0 or 1) from the image, given coordinates in
    subpel resolution which have not been bounds checked.*/
+/*根据图像中给定的坐标，从图像中检索一位（保证为0或1）
+
+未检查边界的子像素分辨率*/
 static int qr_img_get_bit(const unsigned char *_img,int _width,int _height,
  int _x,int _y){
   _x>>=QR_FINDER_SUBPREC;
@@ -1475,6 +1616,11 @@ static void qr_finder_dump_hom_undistorted(qr_finder *_ul,qr_finder *_ur,
 /*A homography from one region of the grid back to the image.
   Unlike a qr_hom, this does not include an inverse transform and maps directly
    from the grid points, not a square with power-of-two sides.*/
+/*从网格的一个区域到图像的单应性。
+
+与qr_-hom不同，它不包括逆变换和直接映射
+
+从网格点来看，不是一个两边都有力量的正方形*/
 struct qr_hom_cell{
   int fwd[3][3];
   int x0;
@@ -1535,6 +1681,10 @@ static void qr_hom_cell_init(qr_hom_cell *_cell,int _u0,int _v0,
     We take advantage of the fact that we know the source points have a very
      limited dynamic range (so there will never be overflow) and a small amount
      of projective distortion.*/
+    /*首先，纠正源点的排列。
+  我们利用了这样一个事实，即我们知道源点有一个非常重要的位置
+  有限的动态范围（因此永远不会出现溢出）和少量射影失真*/
+
   du10=_u1-_u0;
   du20=_u2-_u0;
   du30=_u3-_u0;
@@ -1554,6 +1704,10 @@ static void qr_hom_cell_init(qr_hom_cell *_cell,int _u0,int _v0,
      reason to scale everything by du32*dv31-du31*dv32.
     Not doing so allows a much larger dynamic range, and is the only way we can
      initialize a base cell that covers the whole grid.*/
+      /*如果源网格点不是非仿射排列，则没有
+    按du32*dv31-du31*dv32缩放所有内容的原因。
+    不这样做允许更大的动态范围，这是我们唯一能做到的
+    初始化覆盖整个网格的基本单元*/
   else a22=1;
   a00=du10*(a20+a22);
   a01=du20*(a21+a22);
@@ -1679,6 +1833,9 @@ static void qr_hom_cell_project(qr_point _p,const qr_hom_cell *_cell,
 
 /*Retrieves the bits corresponding to the alignment pattern template centered
    at the given location in the original image (at subpel precision).*/
+/*检索与对齐模式模板对应的位
+
+在原始图像中的给定位置（以子像素精度）*/
 static unsigned qr_alignment_pattern_fetch(qr_point _p[5][5],int _x0,int _y0,
  const unsigned char *_img,int _width,int _height){
   unsigned v;
@@ -2195,8 +2352,13 @@ static int qr_hom_fit(qr_hom *_hom,qr_finder *_ul,qr_finder *_ur,
     }
   }
   /*By default, use the edge intersection point for the bottom-right corner.*/
-  brx=_p[3][0];
+  /*默认情况下，使用右下角的边交点*/
+  brx=_p[3][0]; //todo edit
   bry=_p[3][1];
+  //LOGD("bottom right x1: %d, y1: %d",brx,bry);
+  //LOGD("x2: %d, y2: %d",_p[0][0],_p[0][1]);
+  //LOGD("x3: %d, y3: %d",_p[1][0],_p[1][1]);
+  //LOGD("x4: %d, y4: %d",_p[2][0],_p[2][1]);
   /*However, if our average version estimate is greater than 1, NOW we try to
      search for an alignment pattern.
     We get a much better success rate by doing this after our initial attempt
@@ -2209,17 +2371,36 @@ static int qr_hom_fit(qr_hom *_hom,qr_finder *_ul,qr_finder *_ur,
     Non-linear distortion is usually maximal on the outside edge, and thus
      estimating the grid position from points on the interior means we might
      get mis-aligned by the time we reach the edge.*/
-  version4=_ul->eversion[0]+_ul->eversion[1]+_ur->eversion[0]+_dl->eversion[1];
-  if(version4>4){
+  /*然而，如果我们的平均版本估计值大于1，现在我们尝试
+搜索对齐模式。
+在初次尝试之后，我们通过这样做获得了更好的成功率
+将变换提升为单应性。
+你可能还认为使用内部搜索器更可靠
+图案边缘，因为外部边缘可能被遮挡或损坏
+这样我们就不用在下面再投影了，因为它们会形成一个漂亮的正方形
+与对齐模式的位置有关，但结果证明这是一个糟糕的问题
+主意
+非线性失真通常在外边缘最大，因此
+从内部的点估计网格位置意味着我们可能
+当我们到达边缘时，会出现错误对齐*/
+  version4=_ul->eversion[0]+_ul->eversion[1]+_ur->eversion[0]+_dl->eversion[1]; //4*version，4倍version
+//  LOGD("*********************************version4 %d" , version4);
+  if(version4>4){ //可以注释掉,version没有太大意义，直接使用dim去估计尺寸
     qr_hom_cell cell;
     qr_point    p3;
     int         dim;
-    dim=17+version4;
+    //dim=17+version4;
+    //dim = 58;
+    dim = (_ul->dim[0] + _ul->dim[1] + _ur->dim[0] + _dl->dim[1]) / 4;
+    dim = FindApproxiateDimension(dim);
+//    LOGD("***********************************************FindApproxiateDimension FindApproxiateDimension qr_hom_fit dim %d:",dim);
     qr_hom_cell_init(&cell,0,0,dim-1,0,0,dim-1,dim-1,dim-1,
      _p[0][0],_p[0][1],_p[1][0],_p[1][1],
-     _p[2][0],_p[2][1],_p[3][0],_p[3][1]);
-    if(qr_alignment_pattern_search(p3,&cell,dim-7,dim-7,4,
+     _p[2][0],_p[2][1],_p[3][0],_p[3][1]);//四个角点?第四个非校正点?
+      if(qr_alignment_pattern_search(p3,&cell,dim-3,dim-3,4, //todo edit
+      //if(qr_alignment_pattern_search(p3,&cell,dim-7,dim-7,4,
      _img,_width,_height)>=0){
+//        LOGD("****************************alignment found p3_x %d p3_y %d",p3[0],p3[1]); //此为校正点?
       long long w;
       long long mask;
       int       c21;
@@ -2237,13 +2418,26 @@ static int qr_hom_fit(qr_hom *_hom,qr_finder *_ul,qr_finder *_ur,
       /*We do, however, need four points in a square to initialize our
          homography, so project the point from the alignment center to the
          corner of the code area.*/
+                /*没有必要更新边界框的角点，事实上我们
+          如果我们这样做了，表现会更差。
+          很明显，找到这种排列模式对我们来说已经足够好了，所以
+          它应该足以用于网格初始化。
+          搜索的目的是为了得到更准确的版本
+          估计和更好的解码版本和格式信息的机会。
+          这对于没有编码的小版本尤其重要
+          版本信息，因为版本中的任何不匹配都会呈现代码
+          不可编辑*/
+        /*然而，我们确实需要正方形中的四个点来初始化
+        单应性，因此将点从对齐中心投影到
+        代码区的一角*/
       c21=_p[2][0]*_p[1][1]-_p[2][1]*_p[1][0];
-      dx21=_p[2][0]-_p[1][0];
-      dy21=_p[2][1]-_p[1][1];
+      dx21=_p[2][0]-_p[1][0]; //todo edit 定位点水平距离
+      dy21=_p[2][1]-_p[1][1]; //todo edit 定位点垂直距离
       w=QR_EXTMUL(dim-7,c21,
        QR_EXTMUL(dim-13,_p[0][0]*dy21-_p[0][1]*dx21,
        QR_EXTMUL(6,p3[0]*dy21-p3[1]*dx21,0)));
       /*The projection failed: invalid geometry.*/
+        /*投影失败：几何体无效*/
       if(w==0)return -1;
       mask=QR_SIGNMASK(w);
       w=w+mask^mask;
@@ -2253,9 +2447,12 @@ static int qr_hom_fit(qr_hom *_hom,qr_finder *_ul,qr_finder *_ur,
       bry=(int)QR_DIVROUND(QR_EXTMUL((dim-7)*_p[0][1],-p3[1]*dx21,
        QR_EXTMUL((dim-13)*p3[1],c21+_p[0][0]*dy21,
        QR_EXTMUL(6*_p[0][1],c21+p3[0]*dy21,0)))+mask^mask,w);
+    } else {
+        //LOGD("****************************alignment not found");
     }
   }
-  /*Now we have four points that map to a square: initialize the projection.*/
+    //LOGD("************bottom right check x1: %d, y1: %d",brx,bry);
+  /*Now we have four points that map to a square: initialize the projection.*/ /*现在我们有四个点映射到一个正方形：初始化投影*/
   qr_hom_init(_hom,_p[0][0],_p[0][1],_p[1][0],_p[1][1],
    _p[2][0],_p[2][1],brx,bry,QR_HOM_BITS);
   return 0;
@@ -2389,6 +2586,7 @@ static int qr_finder_version_decode(qr_finder *_f,const qr_hom *_hom,
 }
 
 /*Reads the format info bits near the finder modules and decodes them.*/
+/*读取finder模块附近的格式信息位并对其进行解码*/ //功能区?
 static int qr_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
  qr_finder *_dl,const qr_hom *_hom,
  const unsigned char *_img,int _width,int _height){
@@ -2435,6 +2633,15 @@ static int qr_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
     y+=dy;
     w+=dw;
   }
+    char *c1;
+    c1 = malloc(16);
+    memset(c1, 0, 16);
+    if (IntegerToBinary2(lo[0], c1, 16))
+    {
+        //LOGD("bit int ================================= lo lo lo lo : %s ,integer %d", c1 ,lo[0]);
+    }
+    //LOGD("-------------------------------------------------- i %d, k %d, x %d,y %d ",i,k,x,y);
+  //LOGD("-------------------------------------------------- i %d, k %d, x %d,y %d ",i,k,x,y);
   hi[0]=0;
   dx=-_hom->fwd[0][0]*_ul->size[0];
   dy=-_hom->fwd[1][0]*_ul->size[0];
@@ -2449,6 +2656,13 @@ static int qr_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
       hi[0]|=qr_img_get_bit(_img,_width,_height,p[0],p[1])<<k++;
     }
   }
+    char *c;
+    c = malloc(16);
+    memset(c, 0, 16);
+    if (IntegerToBinary2(hi[0], c, 16))
+    {
+        //LOGD("bit int ================================= hi hi hi hi : %s", c);
+    }
   /*Read the bits next to the UR corner.*/
   lo[1]=0;
   u=_ur->o[0]+3*_ur->size[0];
@@ -2486,6 +2700,9 @@ static int qr_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
   /*For each group of bits we have two samples... try them in all combinations
      and pick the most popular valid code, breaking ties using the number of
      bit errors.*/
+    /*对于每组位，我们有两个样本。。。尝试各种组合
+  然后选择最流行的有效代码，使用
+  位错误*/
   imax=2<<(hi[0]!=hi[1]);
   di=1+(lo[0]==lo[1]);
   nfmt_info=0;
@@ -2522,6 +2739,145 @@ static int qr_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
   return nerrs[besti]<4?fmt_info[besti]:-1;
 }
 
+static int hx_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
+                                     qr_finder *_dl,const qr_hom *_hom,
+                                     const unsigned char *_img,int _width,int _height){
+    qr_point p;
+    unsigned lo[2];
+    unsigned hi[2];
+    int      u;
+    int      v;
+    int      x;
+    int      y;
+    int      w;
+    int      dx;
+    int      dy;
+    int      dw;
+    int      fmt_info[4];
+    int      count[4];
+    int      nerrs[4];
+    int      nfmt_info;
+    int      besti;
+    int      imax;
+    int      di;
+    int      i;
+    int      k;
+
+/*Read the bits around the UL corner.*/
+//    hi[0]=0;
+//    u=_ul->o[0]+5*_ul->size[0];
+//    v=_ul->o[1]-3*_ul->size[1];
+//    x=_hom->fwd[0][0]*u+_hom->fwd[0][1]*v;
+//    y=_hom->fwd[1][0]*u+_hom->fwd[1][1]*v;
+//    w=_hom->fwd[2][0]*u+_hom->fwd[2][1]*v+_hom->fwd22;
+//    dx=_hom->fwd[0][1]*_ul->size[1];
+//    dy=_hom->fwd[1][1]*_ul->size[1];
+//    dw=_hom->fwd[2][1]*_ul->size[1];
+//    k=15;i=7;
+//    while(i-->0){
+//        qr_hom_fproject(p,_hom,x,y,w);
+//        hi[0]|=qr_img_get_bit(_img,_width,_height,p[0],p[1])<<k--;
+//        x+=dx;
+//        y+=dy;
+//        w+=dw;
+//    }
+//    char *c;
+//    c = malloc(16);
+//    memset(c, 0, 16);
+//    if (IntegerToBinary2(hi[0], c, 16))
+//    {
+//        LOGD("bit int ================================= hi hi hi hi : %s", c);
+//    }
+//    LOGD("====================================qr_img_get_bit %d" , qr_img_get_bit(_img,_width,_height,p[0],p[1]));
+//
+
+    lo[0]=0;
+    u=_ul->o[0]+5*_ul->size[0];
+    v=_ul->o[1]-3*_ul->size[1];
+    x=_hom->fwd[0][0]*u+_hom->fwd[0][1]*v;
+    y=_hom->fwd[1][0]*u+_hom->fwd[1][1]*v;
+    w=_hom->fwd[2][0]*u+_hom->fwd[2][1]*v+_hom->fwd22;
+    dx=_hom->fwd[0][1]*_ul->size[1];
+    dy=_hom->fwd[1][1]*_ul->size[1];
+    dw=_hom->fwd[2][1]*_ul->size[1];
+    for(k=i=0;;i++){
+        /*Skip the timing pattern row.*/
+        //if(i!=6){
+        qr_hom_fproject(p,_hom,x,y,w);
+        lo[0]|=qr_img_get_bit(_img,_width,_height,p[0],p[1])<<k++;
+        /*Don't advance q in the last iteration... we'll start the next loop from
+           the current position.*/
+        if(i>=8)break;
+        //}
+        x+=dx;
+        y+=dy;
+        w+=dw;
+    }
+    int tmp = 0;
+    int index = 1;
+    for(i = 0; i < 8; i++) {//第一位不要，多移一位
+        tmp |= (index & lo[0]);
+        if (i != 7) {
+            tmp <<=1;
+            lo[0] >>=1;
+        }
+    }
+    lo[0] = tmp;
+    lo[0] &= 0x7f;//&01111111将最高位设置为0
+    lo[0] <<= 8;
+    char *c1;
+    c1 = malloc(16);
+    memset(c1, 0, 16);
+    if (IntegerToBinary2(lo[0], c1, 16))
+    {
+        //LOGD("bit int ================================= lo lo lo lo : %s ,integer %d", c1 ,lo[0]);
+    }
+    //LOGD("-------------------------------------------------- i %d, k %d, x %d,y %d ",i,k,x,y);
+    //LOGD("-------------------------------------------------- i %d, k %d, x %d,y %d ",i,k,x,y);
+    hi[0]=0;
+    dx=-_hom->fwd[0][0]*_ul->size[0];
+    dy=-_hom->fwd[1][0]*_ul->size[0];
+    dw=-_hom->fwd[2][0]*_ul->size[0];
+    k-=1;//todo check.不跳过timing pattern column
+    while(i-->0){
+        x+=dx;
+        y+=dy;
+        w+=dw;
+        /*Skip the timing pattern column.*/
+        //if(i!=6){
+        qr_hom_fproject(p,_hom,x,y,w);
+        hi[0]|=qr_img_get_bit(_img,_width,_height,p[0],p[1])<<k++;
+        //}
+    }
+    hi[0]>>=8;
+    char *c;
+    c = malloc(16);
+    memset(c, 0, 16);
+    if (IntegerToBinary2(hi[0], c, 16))
+    {
+//        LOGD("bit int ================================= hi hi hi hi : %s", c);
+    }
+    unsigned format = hi[0] | lo[0];
+
+    char *fmt;
+    fmt = malloc(16);
+    memset(fmt, 0, 16);
+    if (IntegerToBinary2(format, fmt, 16))
+    {
+        //LOGD("bit int ================================= fmt fmt fmt fmt : %s", fmt);
+    }
+    //LOGD("---------------------------------------fmt:%s , format:%d",fmt,format);
+    //将二维码的功能区高8位与低8位互换。并且改变bit顺序.
+    int ret = bch15_5_correct(&format);
+    //LOGD("-----------------------------------------bch15_5_correct ret%d" , ret);
+    if (ret < 0) {
+        return ret;//纠错失败返回负数
+    } else {
+        return format;
+    }
+    //return nerrs[besti]<4?fmt_info[besti]:-1;
+}
+
 
 
 /*The grid used to sample the image bits.
@@ -2531,6 +2887,19 @@ static int qr_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
   All of these structural elements, as well as the timing patterns, version
    info, and format info, are marked in fpmask so they can easily be skipped
    during decode.*/
+/*用于对图像位进行采样的网格。
+
+网格被划分为由查找器模式和/或
+
+对齐模式，并创建一个返回原始图像的单独贴图
+
+为每个细胞构建。
+
+所有这些结构元素，以及时间模式
+
+信息和格式信息在fpmask中标记，因此可以轻松跳过
+
+在解码过程中*/
 struct qr_sampling_grid{
   qr_hom_cell    *cells[6];
   unsigned       *fpmask;
@@ -2595,18 +2964,22 @@ static inline void qr_svg_points(const char *cls,
   Return: 0 on success, or a negative value on error.*/
 static void qr_sampling_grid_init(qr_sampling_grid *_grid,int _version,
  const qr_point _ul_pos,const qr_point _ur_pos,const qr_point _dl_pos,
- qr_point _p[4],const unsigned char *_img,int _width,int _height){
+ qr_point _p[4],const unsigned char *_img,int _width,int _height,int dim){ //todo edit
   qr_hom_cell          base_cell;
-  int                  align_pos[7];
-  int                  dim;
+  int                  align_pos[7]; //todo check 校正符个数
+  //int                  dim;
   int                  nalign;
   int                  i;
-  dim=17+(_version<<2);
-  nalign=(_version/7)+2;
+  //dim=17+(_version<<2); //todo edit版本尺寸
+  //dim = 58;
+  nalign=(_version/7)+2; //todo check nalign是什么
+  //LOGD("*************************************************** nalign = %d, version = %d",nalign,_version);
   /*Create a base cell to bootstrap the alignment pattern search.*/
+    /*创建一个基本单元来引导对齐模式搜索*/
   qr_hom_cell_init(&base_cell,0,0,dim-1,0,0,dim-1,dim-1,dim-1,
    _p[0][0],_p[0][1],_p[1][0],_p[1][1],_p[2][0],_p[2][1],_p[3][0],_p[3][1]);
   /*Allocate the array of cells.*/
+  /*分配单元格数组*/
   _grid->ncells=nalign-1;
   _grid->cells[0]=(qr_hom_cell *)malloc(
    (nalign-1)*(nalign-1)*sizeof(*_grid->cells[0]));
@@ -2614,18 +2987,18 @@ static void qr_sampling_grid_init(qr_sampling_grid *_grid,int _version,
   /*Initialize the function pattern mask.*/
   _grid->fpmask=(unsigned *)calloc(dim,
    (dim+QR_INT_BITS-1>>QR_INT_LOGBITS)*sizeof(*_grid->fpmask));
-  /*Mask out the finder patterns (and separators and format info bits).*/
+  /*Mask out the finder patterns (and separators and format info bits).*/ //定位区
   qr_sampling_grid_fp_mask_rect(_grid,dim,0,0,9,9);
   qr_sampling_grid_fp_mask_rect(_grid,dim,0,dim-8,9,8);
   qr_sampling_grid_fp_mask_rect(_grid,dim,dim-8,0,8,9);
-  /*Mask out the version number bits.*/
-  if(_version>6){
-    qr_sampling_grid_fp_mask_rect(_grid,dim,0,dim-11,6,3);
-    qr_sampling_grid_fp_mask_rect(_grid,dim,dim-11,0,3,6);
-  }
-  /*Mask out the timing patterns.*/
-  qr_sampling_grid_fp_mask_rect(_grid,dim,9,6,dim-17,1);
-  qr_sampling_grid_fp_mask_rect(_grid,dim,6,9,1,dim-17);
+  /*Mask out the version number bits.*/ //版本区
+//  if(_version>6){
+//    qr_sampling_grid_fp_mask_rect(_grid,dim,0,dim-11,6,3);
+//    qr_sampling_grid_fp_mask_rect(_grid,dim,dim-11,0,3,6);
+//  }
+  /*Mask out the timing patterns.*/ //校准线
+//  qr_sampling_grid_fp_mask_rect(_grid,dim,9,6,dim-17,1);
+//  qr_sampling_grid_fp_mask_rect(_grid,dim,6,9,1,dim-17);
   /*If we have no alignment patterns (e.g., this is a version 1 code), just use
      the base cell and hope it's good enough.*/
   if(_version<2)memcpy(_grid->cells[0],&base_cell,sizeof(base_cell));
@@ -2637,8 +3010,10 @@ static void qr_sampling_grid_init(qr_sampling_grid *_grid,int _version,
     q=(qr_point *)malloc(nalign*nalign*sizeof(*q));
     p=(qr_point *)malloc(nalign*nalign*sizeof(*p));
     /*Initialize the alignment pattern position list.*/
+    /*初始化对齐模式位置列表*/
     align_pos[0]=6;
     align_pos[nalign-1]=dim-7;
+    //align_pos[nalign-1]=dim-3;
     if(_version>6){
       int d;
       d=QR_ALIGNMENT_SPACING[_version-7];
@@ -2646,6 +3021,9 @@ static void qr_sampling_grid_init(qr_sampling_grid *_grid,int _version,
     }
     /*Three of the corners use a finder pattern instead of a separate
        alignment pattern.*/
+      /*其中三个角使用查找器模式，而不是单独的模式
+
+  对齐模式*/
     q[0][0]=3;
     q[0][1]=3;
     p[0][0]=_ul_pos[0];
@@ -2658,7 +3036,7 @@ static void qr_sampling_grid_init(qr_sampling_grid *_grid,int _version,
     q[(nalign-1)*nalign][1]=dim-4;
     p[(nalign-1)*nalign][0]=_dl_pos[0];
     p[(nalign-1)*nalign][1]=_dl_pos[1];
-    /*Scan for alignment patterns using a diagonal sweep.*/
+    /*Scan for alignment patterns using a diagonal sweep.*/ //使用对角线扫描扫描对齐模式
     for(k=1;k<2*nalign-1;k++){
       int jmin;
       int jmax;
@@ -2685,6 +3063,11 @@ static void qr_sampling_grid_init(qr_sampling_grid *_grid,int _version,
           /*Each predictor is basically a straight-line extrapolation from two
              neighboring alignment patterns (except possibly near the opposing
              finder patterns).*/
+            /*每个预测值基本上是两个预测值的直线外推
+
+            相邻的对齐模式（可能在相反方向附近除外
+
+            查找器模式）*/
           qr_hom_cell_project(p0,_grid->cells[i-2]+j-1,u,v,0);
           qr_hom_cell_project(p1,_grid->cells[i-2]+j-2,u,v,0);
           qr_hom_cell_project(p2,_grid->cells[i-1]+j-2,u,v,0);
@@ -2712,7 +3095,10 @@ static void qr_sampling_grid_init(qr_sampling_grid *_grid,int _version,
           A large displacement here usually means a false positive (e.g., when
            the real alignment pattern is damaged or missing), which can
            severely distort the projection.*/
-        qr_alignment_pattern_search(p[k],cell,u,v,2,_img,_width,_height);
+        //qr_alignment_pattern_search(p[k],cell,u,v,2,_img,_width,_height);
+        int result = qr_alignment_pattern_search(p[k],cell,u + 4,v + 4,2,_img,_width,_height);
+        //int result = qr_alignment_pattern_search(p[k],cell,u,v,2,_img,_width,_height);
+//        LOGD("*********************************************search result %d" , result);
         if(i>0&&j>0){
           qr_hom_cell_init(_grid->cells[i-1]+j-1,
            q[k-nalign-1][0],q[k-nalign-1][1],q[k-nalign][0],q[k-nalign][1],
@@ -2752,6 +3138,13 @@ static void qr_sampling_grid_init(qr_sampling_grid *_grid,int _version,
     Possible strategy: scan the timing pattern at QR_ALIGN_SUBPREC (or finer)
      resolution, use dynamic programming to match midpoints between
      transitions to the ideal grid locations.*/
+    /*TODO:使用计时模式进行微调。
+
+  可能的策略：在QR_ALIGN_SUBPREC（或更精细）处扫描计时模式
+
+  分辨率，使用动态规划来匹配
+
+  过渡到理想的网格位置*/
 }
 
 static void qr_sampling_grid_clear(qr_sampling_grid *_grid){
@@ -2825,6 +3218,7 @@ static void qr_sampling_grid_dump(qr_sampling_grid *_grid,int _version,
 #endif
 
 /*Generate the data mask corresponding to the given mask pattern.*/
+/*生成与给定掩码模式对应的数据掩码*/
 static void qr_data_mask_fill(unsigned *_mask,int _dim,int _pattern){
   int stride;
   int i;
@@ -2832,6 +3226,7 @@ static void qr_data_mask_fill(unsigned *_mask,int _dim,int _pattern){
   stride=_dim+QR_INT_BITS-1>>QR_INT_LOGBITS;
   /*Note that we store bits column-wise, since that's how they're read out of
      the grid.*/
+  //LOGD("_pattern _pattern %d",_pattern);
   switch(_pattern){
     /*10101010 i+j+1&1
       01010101
@@ -2943,6 +3338,155 @@ static void qr_data_mask_fill(unsigned *_mask,int _dim,int _pattern){
   }
 }
 
+int AppendBit(int* val, int bit) {
+  *val <<= 1;
+  *val |= bit;
+  return *val;
+}
+
+//int getBit(unsigned *_data_bits, int x,int y ,int stride) { //data_bit 是由整形构成的数组
+//  int num = _data_bits[y * stride];
+//  int bit = (num >> x) & 1;
+//  return bit;
+//}
+
+int getBit(unsigned *_data_bits, int x,int y ,int stride) { //data_bit 是由整形构成的数组
+    int offset = x % 32;
+    int num = _data_bits[y * stride + (x/32)];
+    int bit = (num >> offset) & 1;
+    return bit;
+}
+
+static void ReadCodewords(int dim, uint8_t * resultBytes, unsigned *_data_bits,int stride) {
+    uint8_t currentByte = 0;
+    int bitsRead = 0;
+    int index = 0;
+    int i, j,k;
+
+    //top
+    // 1    2   3   4   5   6  ---->
+    // 12  11  10   9   8   7  <----
+    for (j = 10; j < dim - 9; j += 2)
+    {
+        for (i = 0; i < 8; i++)
+        {
+            if(i<4)
+                AppendBit(&currentByte, getBit(_data_bits, j, i,stride));
+            else
+                AppendBit(&currentByte, getBit(_data_bits, j - 1, 7-i,stride));
+            if (++bitsRead % 8 == 0) {
+                resultBytes[index] = currentByte;
+//                if (j == 10) {
+//                    Char2Binary(currentByte);
+//                }
+                currentByte = 0;
+                index++;
+            }
+        }
+    }
+
+    for (j = dim - 10; j >= 10; j -= 2)
+    {
+        for (i = 0; i < 8; i++)
+        {
+            if(i<4)
+                AppendBit(&currentByte, getBit(_data_bits, j, 4+i, stride));
+            else
+                AppendBit(&currentByte, getBit(_data_bits, j-1, 11-i, stride));
+            if (++bitsRead % 8 == 0) {
+                resultBytes[index] = currentByte;
+                currentByte = 0;
+                index++;
+            }
+        }
+    }
+
+    //left
+    //  1  2  3  4
+    //  |  |  |  |
+    //  |  |  |  |
+    //  v  v  v  v
+    for (j = 1; j < 8; j+=2)
+    {
+        for (i = 9; i < dim - 9; i += 4)
+        {
+            for (k = 0; k < 8; k++)
+            {
+                if (k < 4)
+                    AppendBit(&currentByte, getBit(_data_bits, j, k + i, stride));
+                else
+                    AppendBit(&currentByte, getBit(_data_bits, j - 1, i + 7 - k, stride));
+                if (++bitsRead % 8 == 0) {
+                    resultBytes[index] = currentByte;
+                    currentByte = 0;
+                    index++;
+                }
+            }
+        }
+    }
+
+    //right
+    //  8  7  6  5
+    //  |  |  |  |
+    //  |  |  |  |
+    //  v  v  v  v
+    for (j = dim - 1; j >=dim-7; j -= 2)
+    {
+        for (i = 9; i < dim - 9; i += 4)
+        {
+            for (k = 0; k < 8; k++)
+            {
+                if (k < 4)
+                    AppendBit(&currentByte, getBit(_data_bits, j, k + i, stride));
+                else
+                    AppendBit(&currentByte, getBit(_data_bits, j - 1, i + 7 - k, stride));
+                if (++bitsRead % 8 == 0) {
+                    resultBytes[index] = currentByte;
+                    currentByte = 0;
+                    index++;
+                }
+            }
+        }
+    }
+
+    //bottom
+    // 12  11  10  9   8   7  <----
+    // 1   2   3   4   5   6  ----->
+    for (j = 10; j < dim - 9; j += 2)
+    {
+        for (i = 0; i < 8; i++)
+        {
+            if (i < 4)
+                AppendBit(&currentByte, getBit(_data_bits, j, i + dim - 4, stride));
+            else
+                AppendBit(&currentByte, getBit(_data_bits, j - 1,  dim + 3 - i, stride));
+            if (++bitsRead % 8 == 0) {
+                resultBytes[index] = currentByte;
+                currentByte = 0;
+                index++;
+            }
+        }
+    }
+
+    for (j = dim - 10; j >= 10; j -= 2)
+    {
+        for (i = 0; i < 8; i++)
+        {
+            if (i < 4)
+                AppendBit(&currentByte, getBit(_data_bits, j,  i + dim - 8, stride));
+            else
+                AppendBit(&currentByte, getBit(_data_bits, j - 1, dim - 1 - i, stride));
+            if (++bitsRead % 8 == 0) {
+                resultBytes[index] = currentByte;
+                currentByte = 0;
+                index++;
+            }
+        }
+    }
+
+
+}
+
 static void qr_sampling_grid_sample(const qr_sampling_grid *_grid,
  unsigned *_data_bits,int _dim,int _fmt_info,
  const unsigned char *_img,int _width,int _height){
@@ -2952,8 +3496,14 @@ static void qr_sampling_grid_sample(const qr_sampling_grid *_grid,
   int j;
   /*We initialize the buffer with the data mask and XOR bits into it as we read
      them out of the image instead of unmasking in a separate step.*/
-  qr_data_mask_fill(_data_bits,_dim,_fmt_info&7);
+    /*我们用数据掩码初始化缓冲区，并在读取时将异或位放入缓冲区
+  将它们从图像中移除，而不是在单独的步骤中揭穿*/
+
+  //qr_data_mask_fill(_data_bits,_dim,_fmt_info&7);//掩模 //todo edit
+  qr_data_mask_fill(_data_bits,_dim,(_fmt_info >> 10)&0x7);//掩模 //todo edit
+
   stride=_dim+QR_INT_BITS-1>>QR_INT_LOGBITS;
+  //LOGD("*********stride %d, _dim %d ",stride,_dim);
   u0=0;
   svg_path_start("sampling-grid", 1, 0, 0);
   /*We read data cell-by-cell to avoid having to constantly change which
@@ -2961,6 +3511,12 @@ static void qr_sampling_grid_sample(const qr_sampling_grid *_grid,
     This (and the position-dependent data mask) is the reason we buffer the
      bits we read instead of converting them directly to codewords here.
     Note that bits are stored column-wise, since that's how we'll scan them.*/
+    /*我们逐单元读取数据，以避免不断地更改
+  我们在读每一位时使用的投影。
+  这（以及位置相关的数据掩码）是我们缓冲
+  我们在这里读取位，而不是将它们直接转换为码字。
+  请注意，位是按列存储的，因为这就是我们扫描它们的方式*/
+    //LOGD("_grid ncells %d",_grid->ncells);
   for(j=0;j<_grid->ncells;j++){
     int i;
     int v0;
@@ -2993,7 +3549,7 @@ static void qr_sampling_grid_sample(const qr_sampling_grid *_grid,
         for(v=v0;v<v1;v++){
           /*Skip doing all the divisions and bounds checks if the bit is in the
              function pattern.*/
-          if(!qr_sampling_grid_is_in_fp(_grid,_dim,u,v)){
+          if(!qr_sampling_grid_is_in_fp(_grid,_dim,u,v)){ //todo 判断是否在定位图形区域
             qr_point p;
             qr_hom_cell_fproject(p,cell,x,y,w);
             _data_bits[u*stride+(v>>QR_INT_LOGBITS)]^=
@@ -3013,11 +3569,54 @@ static void qr_sampling_grid_sample(const qr_sampling_grid *_grid,
     u0=u1;
   }
   svg_path_end();
+
+
+    for (int j = 0; j < _dim; j++) {
+        //char c[32] = {0};
+        char *c;
+        c = malloc(stride*32);
+        //memset(c,0,stride*32);
+        for (int i = 0; i < stride; i++) {
+            char *c1;
+            c1 = malloc(32);
+            int num = _data_bits[j * stride + i];
+            if (IntegerToBinary(num, c1, 32))
+            {
+                //LOGD("bit int 33333333 %s", c1);
+            }
+            memcpy(c + i * 32, c1, 32);
+        }
+        //LOGD("bit int 33333333 %s", c);//打印点阵
+    }
+//    int fmt;
+//    for (int x = 1; x < 8; x++) {
+//        AppendBit(&fmt, getBit(_data_bits, x, 8 ,stride));
+//        //LOGD("********************************************getBit getBit getBit %d, x = %d",getBit(_data_bits, x, 8 ,stride),x);
+//    }
+//    for (int y = 0; y < 8; y++) {
+//        AppendBit(&fmt, getBit(_data_bits, 8, y,stride));
+//    }
+//    char *c;
+//    c = malloc(16);
+//    memset(c, 0, 16);
+//    IntegerToBinary2(fmt, c, 16);
+//    LOGD("------------*********************======================== fmt fmt fmt fmt %d , binary %s",fmt,c);
+//  //  *_fmt_info = 25187;
+//  int ret = bch15_5_correct(_fmt_info);
+//  if (ret == -1) {
+//      *_fmt_info = -1;
+//  }
+//  LOGD("*********************************************formatInfoBits1 bch15_5_correct %s  ,num %d ,ret %d", c,*_fmt_info , ret);
 }
+
+
 
 /*Arranges the sample bits read by qr_sampling_grid_sample() into bytes and
    groups those bytes into Reed-Solomon blocks.
   The individual block pointers are destroyed by this routine.*/
+/*将qr_sampling_grid_sample（）读取的采样位排列为字节和
+将这些字节分组为Reed Solomon块。
+单个块指针被此例程破坏*/
 static void qr_samples_unpack(unsigned char **_blocks,int _nblocks,
  int _nshort_data,int _nshort_blocks,const unsigned *_data_bits,
  const unsigned *_fp_mask,int _dim){
@@ -3119,6 +3718,9 @@ static void qr_samples_unpack(unsigned char **_blocks,int _nblocks,
 /*Bit reading code blatantly stolen^W^Wadapted from libogg/libtheora (because
    I've already debugged it and I know it works).
   Portions (C) Xiph.Org Foundation 1994-2008, BSD-style license.*/
+/*公然从libogg/liborea窃取的位读取代码（因为
+我已经调试过了，我知道它可以工作）。
+第（C）部分第19页。Org Foundation 1994-2008，BSD风格许可证*/
 struct qr_pack_buf{
   const unsigned char *buf;
   int                  endbyte;
@@ -3181,6 +3783,7 @@ static const unsigned char QR_ALNUM_TABLE[45]={
 
 static int qr_code_data_parse(qr_code_data *_qrdata,int _version,
  const unsigned char *_data,int _ndata){
+//    Char2Binary(_data[0]);
   qr_pack_buf qpb;
   unsigned    self_parity;
   int         centries;
@@ -3194,15 +3797,22 @@ static int qr_code_data_parse(qr_code_data *_qrdata,int _version,
   centries=0;
   /*The versions are divided into 3 ranges that each use a different number of
      bits for length fields.*/
-  len_bits_idx=(_version>9)+(_version>26);
+    /*版本分为3个范围，每个范围使用不同数量的
+  长度字段的位*/
+    if(_version<=4)   //0220402
+        len_bits_idx = 8;
+    else
+        len_bits_idx = 9;
+  //len_bits_idx=(_version>9)+(_version>26);
   qr_pack_buf_init(&qpb,_data,_ndata);
   /*While we have enough bits to read a mode...*/
-  while(qr_pack_buf_avail(&qpb)>=4){
+  //while(qr_pack_buf_avail(&qpb)>=4){
     qr_code_data_entry *entry;
     int                 mode;
-    mode=qr_pack_buf_read(&qpb,4);
+    mode=qr_pack_buf_read(&qpb,2);
+    //LOGD("--------------------------------mode mode mode %d,len_bits_idx %d",mode,len_bits_idx);
     /*Mode 0 is a terminator.*/
-    if(!mode)break;
+    //if(!mode)break;
     if(_qrdata->nentries>=centries){
       centries=centries<<1|1;
       _qrdata->entries=(qr_code_data_entry *)realloc(_qrdata->entries,
@@ -3213,6 +3823,7 @@ static int qr_code_data_parse(qr_code_data *_qrdata,int _version,
     /*Set the buffer to NULL, because if parsing fails, we might try to free it
        on clean-up.*/
     entry->payload.data.buf=NULL;
+    mode = QR_MODE_BYTE;
     switch(mode){
       /*The number of bits used to encode the character count for each version
          range and each data mode.*/
@@ -3332,7 +3943,9 @@ static int qr_code_data_parse(qr_code_data *_qrdata,int _version,
         unsigned char *buf;
         unsigned       c;
         int            len;
-        len=qr_pack_buf_read(&qpb,LEN_BITS[len_bits_idx][2]);
+        //len=qr_pack_buf_read(&qpb,LEN_BITS[len_bits_idx][2]);
+        len=qr_pack_buf_read(&qpb,len_bits_idx);
+        //LOGD("----------------------------------------len %d",len);
         if(len<0)return -1;
         /*Check to see if there are enough bits left now, so we don't have to
            in the decode loop.*/
@@ -3422,7 +4035,7 @@ static int qr_code_data_parse(qr_code_data *_qrdata,int _version,
         return -1;
       }break;
     }
-  }
+  //}
   /*Store the parity of the data from this code, for S-A.
     The final parity is the 8-bit XOR of all the decoded bytes of literal data.
     We don't combine the 2-byte kanji codes into one byte in the loops above,
@@ -3477,11 +4090,17 @@ static const unsigned short QR_NCODEWORDS[40]={
 #endif
 
 /*The total number of codewords in a QR code.*/
+/*二维码中的码字总数*/
 static int qr_code_ncodewords(unsigned _version){
   unsigned nalign;
   /*This is 24-27 instructions on ARM in thumb mode, or a 26-32 byte savings
      over just using a table (not counting the instructions that would be
      needed to do the table lookup).*/
+    /*这是在拇指模式下ARM上的24-27条指令，或节省26-32字节
+
+  而不仅仅是使用一张桌子（不包括将要使用的指令）
+
+  需要进行表格查找）*/
   if(_version==1)return 26;
   nalign=(_version/7)+2;
   return (_version<<4)*(_version+8)
@@ -3506,6 +4125,7 @@ static const unsigned char QR_RS_NPAR[40][4]={
 #endif
 
 /*Bulk data for the number of parity bytes per Reed-Solomon block.*/
+/*每个Reed Solomon块的奇偶校验字节数的批量数据*/
 static const unsigned char QR_RS_NPAR_VALS[71]={
   /*[ 0]*/ 7,10,13,17,
   /*[ 4]*/10,16,22, 28,26,26, 26,22, 24,22,22, 26,24,18,22,
@@ -3525,6 +4145,8 @@ static const unsigned char QR_RS_NPAR_OFFS[40]={
   67,67,67,67,67,67,67,67,67,67
 };
 
+/*The number of Reed-Solomon blocks for each version and error correction
+   level.*/
 /*The number of Reed-Solomon blocks for each version and error correction
    level.*/
 static const unsigned char QR_RS_NBLOCKS[40][4]={
@@ -3555,7 +4177,7 @@ static const unsigned char QR_RS_NBLOCKS[40][4]={
 static int qr_code_decode(qr_code_data *_qrdata,const rs_gf256 *_gf,
  const qr_point _ul_pos,const qr_point _ur_pos,const qr_point _dl_pos,
  int _version,int _fmt_info,
- const unsigned char *_img,int _width,int _height){
+ const unsigned char *_img,int _width,int _height,int dim){ //todo edit 解码.
   qr_sampling_grid   grid;
   unsigned          *data_bits;
   unsigned char    **blocks;
@@ -3567,72 +4189,172 @@ static int qr_code_decode(qr_code_data *_qrdata,const rs_gf256 *_gf,
   int                ecc_level;
   int                ndata;
   int                npar;
-  int                dim;
+  //int                dim;
   int                ret;
   int                i;
   /*Read the bits out of the image.*/
   qr_sampling_grid_init(&grid,_version,_ul_pos,_ur_pos,_dl_pos,_qrdata->bbox,
-   _img,_width,_height);
+   _img,_width,_height,dim); //todo edit
 #if defined(QR_DEBUG)
   qr_sampling_grid_dump(&grid,_version,_img,_width,_height);
 #endif
-  dim=17+(_version<<2);
+  //dim=17+(_version<<2); //todo edit dim 50,58,66,74,82,90,98,106
+//  LOGD("----------*****************************dim dim %d:" , dim);
   data_bits=(unsigned *)malloc(
-   dim*(dim+QR_INT_BITS-1>>QR_INT_LOGBITS)*sizeof(*data_bits));
-  qr_sampling_grid_sample(&grid,data_bits,dim,_fmt_info,_img,_width,_height);
-  /*Group those bits into Reed-Solomon codewords.*/
-  ecc_level=(_fmt_info>>3)^1;
-  nblocks=QR_RS_NBLOCKS[_version-1][ecc_level];
-  npar=*(QR_RS_NPAR_VALS+QR_RS_NPAR_OFFS[_version-1]+ecc_level);
-  ncodewords=qr_code_ncodewords(_version);
-  block_sz=ncodewords/nblocks;
-  nshort_blocks=nblocks-(ncodewords%nblocks);
-  blocks=(unsigned char **)malloc(nblocks*sizeof(*blocks));
-  block_data=(unsigned char *)malloc(ncodewords*sizeof(*block_data));
-  blocks[0]=block_data;
-  for(i=1;i<nblocks;i++)blocks[i]=blocks[i-1]+block_sz+(i>nshort_blocks);
-  qr_samples_unpack(blocks,nblocks,block_sz-npar,nshort_blocks,
-   data_bits,grid.fpmask,dim);
-  qr_sampling_grid_clear(&grid);
-  free(blocks);
-  free(data_bits);
-  /*Perform the error correction.*/
-  ndata=0;
-  ncodewords=0;
-  ret=0;
-  for(i=0;i<nblocks;i++){
-    int block_szi;
-    int ndatai;
-    block_szi=block_sz+(i>=nshort_blocks);
-    ret=rs_correct(_gf,QR_M0,block_data+ncodewords,block_szi,npar,NULL,0);
-    /*For version 1 symbols and version 2-L and 3-L symbols, we aren't allowed
-       to use all the parity bytes for correction.
-      They are instead used to improve detection.
-      Version 1-L reserves 3 parity bytes for detection.
-      Versions 1-M and 2-L reserve 2 parity bytes for detection.
-      Versions 1-Q, 1-H, and 3-L reserve 1 parity byte for detection.
-      We can ignore the version 3-L restriction because it has an odd number of
-       parity bytes, and we don't support erasure detection.*/
-    if(ret<0||_version==1&&ret>ecc_level+1<<1||
-     _version==2&&ecc_level==0&&ret>4){
-      ret=-1;
-      break;
+   dim*(dim+QR_INT_BITS-1>>QR_INT_LOGBITS)*sizeof(*data_bits));memset(data_bits,0,dim*(dim+QR_INT_BITS-1>>QR_INT_LOGBITS)*sizeof(*data_bits));
+//    LOGD("----------data_bits length %d:" , dim*(dim+QR_INT_BITS-1>>QR_INT_LOGBITS)*sizeof(*data_bits));
+//    LOGD("----------sizeof data_bits %d:" , sizeof(*data_bits));
+//    LOGD("----------QR_INT_BITS11111 %d:" , (dim+QR_INT_BITS-1>>QR_INT_LOGBITS));
+//    LOGD("----------QR_INT_LOGBITS %d:" , QR_INT_LOGBITS);
+    int stride=dim+QR_INT_BITS-1>>QR_INT_LOGBITS;
+//    LOGD("stride :%d",stride);
+
+  //int       fmt_info;
+  qr_sampling_grid_sample(&grid,data_bits,dim,_fmt_info,_img,_width,_height); //todo edit划分网格
+//  LOGD("****************************** fmt_info fmt_info %d" ,_fmt_info);
+    int info = _fmt_info >> 10;
+    int errLevel = 0, mask = 0;
+    errLevel = (info & 0x18) >> 3;
+    mask = info & 0x3;
+
+    int versionNumber = GetVersionNum(dim);
+    int totalBytes = (dim - 18) * 4;
+    int totalDataBytes = GetTotalCodeWords(errLevel, versionNumber)*2;
+    uint8_t *resultBytes;
+    resultBytes = malloc(totalBytes);
+
+    ReadCodewords(dim, resultBytes, data_bits, stride);
+    //Char2Binary(resultBytes[totalBytes - 1]);
+    int halfTotalBytes = totalBytes >> 1;
+    int halfTotalDataBytes = totalDataBytes >> 1;
+
+//    unsigned char* halfBytes = (unsigned char*)malloc(halfTotalBytes * sizeof(unsigned char));
+//    memset(halfBytes, 0, halfTotalBytes * sizeof(unsigned char));
+//    memcpy(halfBytes, resultBytes, halfTotalBytes);
+//    ret= rs_correct(_gf, QR_M0, halfBytes, halfTotalBytes, halfTotalBytes-halfTotalDataBytes, NULL, 0);
+//    LOGD("--------------------------------test ret = %d",ret);
+//    for (int i = 0; i < totalBytes; i++) {
+//        LOGD("--------------------------------------Bytes %d",resultBytes[i]);
+//    }
+//    LOGD("----------------------------------------ecc ecc %d , mask mask %d,versionNumber%d"
+//         ",halfTotalBytes = %d,halfTotalDataBytes = %d",errLevel,mask,versionNumber,halfTotalBytes,halfTotalDataBytes);
+
+  unsigned char* halfBytes = (unsigned char*)malloc(halfTotalBytes * sizeof(unsigned char));
+
+  unsigned char* DataBytes=(unsigned char*)malloc(totalDataBytes * sizeof(unsigned char));
+  memset(DataBytes, 0, totalDataBytes * sizeof(unsigned char));
+    ret = 0;
+    for (int i = 0; i < 2; i++)
+    {
+      memset(halfBytes, 0, halfTotalBytes * sizeof(unsigned char));
+      memcpy(halfBytes, resultBytes + i * halfTotalBytes, halfTotalBytes);
+        Char2Binary(halfBytes[0]);
+      ret= rs_correct(_gf, QR_M0, halfBytes, halfTotalBytes, halfTotalBytes-halfTotalDataBytes, NULL, 0);
+      //ret= rs_correct(_gf, QR_M0, resultBytes + i*halfTotalBytes, halfTotalBytes, halfTotalBytes-halfTotalDataBytes, NULL, 0);
+        //Char2Binary(halfBytes[0]);
+//      LOGD("----------------------------------------for ret = %d i=%d",ret,i);
+      if (ret < 0)
+      {
+        ret = -1;
+        break;
+      }
+
+      memcpy(DataBytes + i * halfTotalDataBytes, halfBytes, halfTotalDataBytes);
     }
-    ndatai=block_szi-npar;
-    memmove(block_data+ndata,block_data+ncodewords,ndatai*sizeof(*block_data));
-    ncodewords+=block_szi;
-    ndata+=ndatai;
-  }
+    if(ret>=0){
+        ret=qr_code_data_parse(_qrdata,versionNumber,DataBytes,totalDataBytes);
+        /*We could return any partially decoded data, but then we'd have to have
+           API support for that; a mode ignoring ECC errors might also be useful.*/
+        if(ret<0)qr_code_data_clear(_qrdata);
+        _qrdata->version=_version;
+        _qrdata->ecc_level=ecc_level;
+    }
+    free(resultBytes);
+    free(halfBytes);
+    free(DataBytes);
+    free(data_bits);
+//    LOGD("----------------------------------------halfTotalBytes %d , halfTotalDataBytes %d ,ret %d",halfTotalBytes,halfTotalDataBytes,ret);
+//    /*Parse the corrected bitstream.*/
+//    if(ret>=0){
+//        ret=qr_code_data_parse(_qrdata,versionNumber,DataBytes,totalDataBytes);
+//        LOGD("---------------------------------------------------- qr_code_data_parse ret = %d",ret);
+//        /*We could return any partially decoded data, but then we'd have to have
+//           API support for that; a mode ignoring ECC errors might also be useful.*/
+//        if(ret<0)qr_code_data_clear(_qrdata);
+//        _qrdata->version=versionNumber;
+//        _qrdata->ecc_level=errLevel;
+//    }
+//    LOGD("**********************************************qr_code_decode ret %d" , ret);
+//    return ret;
+
+  /*Group those bits into Reed-Solomon codewords.*/
+//    _version = 5;
+//  ecc_level=2;
+//  nblocks=QR_RS_NBLOCKS[_version-1][ecc_level];//总共有多少个block
+//  npar=*(QR_RS_NPAR_VALS+QR_RS_NPAR_OFFS[_version-1]+ecc_level);//纠错字节数*2
+//  ncodewords=qr_code_ncodewords(_version);//字节总数
+//  block_sz=ncodewords/nblocks;//每组block的字节总数
+//  nshort_blocks=nblocks-(ncodewords%nblocks);
+//    LOGD("---------------------------------------- block_sz %d , ecc_level %d nblocks %d npar%d _version%d "
+//         "nshort_blocks%d ncodewords%d ,sizeof(*blocks) %d:" , block_sz , errLevel ,nblocks,npar,_version,nshort_blocks,ncodewords,sizeof(*blocks));
+//  blocks=(unsigned char **)malloc(nblocks*sizeof(*blocks));
+//  block_data=(unsigned char *)malloc(ncodewords*sizeof(*block_data));//数据
+//  LOGD("------------------------------------------block_data size %d", ncodewords*sizeof(*block_data));
+//  blocks[0]=block_data;
+//  for(i=1;i<nblocks;i++)blocks[i]=blocks[i-1]+block_sz+(i>nshort_blocks);
+//  qr_samples_unpack(blocks,nblocks,block_sz-npar,nshort_blocks,
+//   data_bits,grid.fpmask,dim);
+//  qr_sampling_grid_clear(&grid);
+//  free(blocks);
+//  free(data_bits);
+//  /*Perform the error correction.*/
+//  ndata=0;
+//  ncodewords=0;
+//  ret=0;
+//  for(i=0;i<nblocks;i++){
+//    int block_szi;
+//    int ndatai;
+//    block_szi=block_sz+(i>=nshort_blocks);
+//      LOGD("--------------------------------------rs_correct block_szi %d nshort_blocks %d i = %d ,ncodewords %d,npar %d :" , block_szi,nshort_blocks,i,ncodewords,npar);
+//    ret=rs_correct(_gf,QR_M0,block_data+ncodewords,block_szi,npar,NULL,0);
+//    /*For version 1 symbols and version 2-L and 3-L symbols, we aren't allowed
+//       to use all the parity bytes for correction.
+//      They are instead used to improve detection.
+//      Version 1-L reserves 3 parity bytes for detection.
+//      Versions 1-M and 2-L reserve 2 parity bytes for detection.
+//      Versions 1-Q, 1-H, and 3-L reserve 1 parity byte for detection.
+//      We can ignore the version 3-L restriction because it has an odd number of
+//       parity bytes, and we don't support erasure detection.*/
+//    /*对于版本1符号以及版本2-L和3-L符号，我们是不允许的
+//    使用所有奇偶校验字节进行更正。
+//    它们被用来提高检测能力。
+//    版本1-L保留3个奇偶校验字节用于检测。
+//    版本1-M和2-L保留2个奇偶校验字节用于检测。
+//    版本1-Q、1-H和3-L保留1个奇偶校验字节用于检测。
+//    我们可以忽略版本3-L的限制，因为它有奇数个
+//    奇偶校验字节，我们不支持擦除检测*/
+//    if(ret<0||_version==1&&ret>ecc_level+1<<1||
+//     _version==2&&ecc_level==0&&ret>4){
+//      ret=-1;
+//      break;
+//    }
+//    ndatai=block_szi-npar;
+//    memmove(block_data+ndata,block_data+ncodewords,ndatai*sizeof(*block_data));
+//    ncodewords+=block_szi;
+//    ndata+=ndatai;
+//  }
   /*Parse the corrected bitstream.*/
-  if(ret>=0){
-    ret=qr_code_data_parse(_qrdata,_version,block_data,ndata);
-    /*We could return any partially decoded data, but then we'd have to have
-       API support for that; a mode ignoring ECC errors might also be useful.*/
-    if(ret<0)qr_code_data_clear(_qrdata);
-    _qrdata->version=_version;
-    _qrdata->ecc_level=ecc_level;
-  }
-  free(block_data);
+//  if(ret>=0){
+//      LOGD("+++++++++++++++++++++++++++++++ ndata = %d",ndata);
+//    ret=qr_code_data_parse(_qrdata,_version,block_data,ndata);
+//    /*We could return any partially decoded data, but then we'd have to have
+//       API support for that; a mode ignoring ECC errors might also be useful.*/
+//    if(ret<0)qr_code_data_clear(_qrdata);
+//    _qrdata->version=_version;
+//    _qrdata->ecc_level=ecc_level;
+//  }
+//  free(block_data);
+//  LOGD("**********************************************qr_code_decode ret %d" , ret);
   return ret;
 }
 
@@ -3690,20 +4412,24 @@ static int qr_reader_try_configuration(qr_reader *_reader,
        estimate it there.
       Although it should be the same along both axes, we keep separate
        estimates to account for any remaining projective distortion.*/
+      /*从两个相对的角估计模块大小和版本号。
+  模块大小在图像中不是常数，所以我们计算一个仿射函数
+  从三个点到正方形区域的投影
+  估计一下。虽然沿两个轴的方向应该相同，但我们保持分离估计，以解释任何剩余的投影失真*/
     res=QR_INT_BITS-2-QR_FINDER_SUBPREC-qr_ilog(QR_MAXI(_width,_height)-1);
     qr_aff_init(&aff,ul.c->pos,ur.c->pos,dl.c->pos,res);
     qr_aff_unproject(ur.o,&aff,ur.c->pos[0],ur.c->pos[1]);
     qr_finder_edge_pts_aff_classify(&ur,&aff);
-    if(qr_finder_estimate_module_size_and_version(&ur,1<<res,1<<res)<0)continue;
+    if(qr_finder_estimate_module_size_and_version(&ur,1<<res,1<<res)<0)continue;//右上角
     qr_aff_unproject(dl.o,&aff,dl.c->pos[0],dl.c->pos[1]);
     qr_finder_edge_pts_aff_classify(&dl,&aff);
-    if(qr_finder_estimate_module_size_and_version(&dl,1<<res,1<<res)<0)continue;
+    if(qr_finder_estimate_module_size_and_version(&dl,1<<res,1<<res)<0)continue;//左下角
     /*If the estimated versions are significantly different, reject the
        configuration.*/
     if(abs(ur.eversion[1]-dl.eversion[0])>QR_LARGE_VERSION_SLACK)continue;
     qr_aff_unproject(ul.o,&aff,ul.c->pos[0],ul.c->pos[1]);
     qr_finder_edge_pts_aff_classify(&ul,&aff);
-    if(qr_finder_estimate_module_size_and_version(&ul,1<<res,1<<res)<0||
+    if(qr_finder_estimate_module_size_and_version(&ul,1<<res,1<<res)<0||  //左上角
      abs(ul.eversion[1]-ur.eversion[1])>QR_LARGE_VERSION_SLACK||
      abs(ul.eversion[0]-dl.eversion[0])>QR_LARGE_VERSION_SLACK){
       continue;
@@ -3713,7 +4439,9 @@ static int qr_reader_try_configuration(qr_reader *_reader,
 #endif
     /*If we made it this far, upgrade the affine homography to a full
        homography.*/
-    if(qr_hom_fit(&hom,&ul,&ur,&dl,bbox,&aff,
+    /*如果我们能做到这一点，就把仿射单应矩阵升级到一个完整的单应矩阵
+    单应性*/
+    if(qr_hom_fit(&hom,&ul,&ur,&dl,bbox,&aff, //todo check this function 放射变换 version4.透视变换?
      &_reader->isaac,_img,_width,_height)<0){
       continue;
     }
@@ -3722,13 +4450,16 @@ static int qr_reader_try_configuration(qr_reader *_reader,
     qr_hom_unproject(ur.o,&hom,ur.c->pos[0],ur.c->pos[1]);
     qr_hom_unproject(dl.o,&hom,dl.c->pos[0],dl.c->pos[1]);
     qr_finder_edge_pts_hom_classify(&ur,&hom);
+      //LOGD("qr_finder_estimate_module_size_and_version before");
     if(qr_finder_estimate_module_size_and_version(&ur,
-     ur.o[0]-ul.o[0],ur.o[0]-ul.o[0])<0){
+     ur.o[0]-ul.o[0],ur.o[0]-ul.o[0])<0){ //左上右上
+        //LOGD("qr_finder_estimate_module_size_and_version ur ul");
       continue;
     }
     qr_finder_edge_pts_hom_classify(&dl,&hom);
     if(qr_finder_estimate_module_size_and_version(&dl,
-     dl.o[1]-ul.o[1],dl.o[1]-ul.o[1])<0){
+     dl.o[1]-ul.o[1],dl.o[1]-ul.o[1])<0){ //左下左上
+        //LOGD("qr_finder_estimate_module_size_and_version dl ul");
       continue;
     }
 #if defined(QR_DEBUG)
@@ -3803,51 +4534,72 @@ static int qr_reader_try_configuration(qr_reader *_reader,
       /*All tests passed.*/
 #endif
       ur_version=ur.eversion[1];
+      //LOGD("ur_version < 7 : version %d", ur_version);
     }
     else{
       /*If the estimated versions are significantly different, reject the
          configuration.*/
-      if(abs(ur.eversion[1]-dl.eversion[0])>QR_LARGE_VERSION_SLACK)continue;
-      /*Otherwise we try to read the actual version data from the image.
-        If the real version is not sufficiently close to our estimated version,
-         then we assume there was an unrecoverable decoding error (so many bit
-         errors we were within 3 errors of another valid code), and throw that
-         value away.
-        If no decoded version could be sufficiently close, we don't even try.*/
-      if(ur.eversion[1]>=7-QR_LARGE_VERSION_SLACK){
-        ur_version=qr_finder_version_decode(&ur,&hom,_img,_width,_height,0);
-        if(abs(ur_version-ur.eversion[1])>QR_LARGE_VERSION_SLACK)ur_version=-1;
-      }
-      else ur_version=-1;
-      if(dl.eversion[0]>=7-QR_LARGE_VERSION_SLACK){
-        dl_version=qr_finder_version_decode(&dl,&hom,_img,_width,_height,1);
-        if(abs(dl_version-dl.eversion[0])>QR_LARGE_VERSION_SLACK)dl_version=-1;
-      }
-      else dl_version=-1;
-      /*If we got at least one valid version, or we got two and they match,
-         then we found a valid configuration.*/
-      if(ur_version>=0){
-        if(dl_version>=0&&dl_version!=ur_version)continue;
-      }
-      else if(dl_version<0)continue;
-      else ur_version=dl_version;
+      //LOGD("ur_version > 7 : version1 %d, version2 %d, QR_LARGE_VERSION_SLACK %d",ur.eversion[1], dl.eversion[0],QR_LARGE_VERSION_SLACK);
+      //LOGD("ur_version > 7 : ur.dim %d, dl.dim %d",ur.dim[1], dl.dim[0]); //todo check 为什么ur.dim[1], dl.dim[0] 是准确的.
+//      if(abs(ur.eversion[1]-dl.eversion[0])>QR_LARGE_VERSION_SLACK)continue;//版本差别大，跳出循环
+//      /*Otherwise we try to read the actual version data from the image.
+//        If the real version is not sufficiently close to our estimated version,
+//         then we assume there was an unrecoverable decoding error (so many bit
+//         errors we were within 3 errors of another valid code), and throw that
+//         value away.
+//        If no decoded version could be sufficiently close, we don't even try.*/
+//      if(ur.eversion[1]>=7-QR_LARGE_VERSION_SLACK){//功能区版本读取
+//        ur_version=qr_finder_version_decode(&ur,&hom,_img,_width,_height,0);
+//        if(abs(ur_version-ur.eversion[1])>QR_LARGE_VERSION_SLACK)ur_version=-1;
+//      }
+//      else ur_version=-1;
+//      if(dl.eversion[0]>=7-QR_LARGE_VERSION_SLACK){//版本读取
+//        dl_version=qr_finder_version_decode(&dl,&hom,_img,_width,_height,1);
+//        if(abs(dl_version-dl.eversion[0])>QR_LARGE_VERSION_SLACK)dl_version=-1;
+//      }
+//      else dl_version=-1;
+//      /*If we got at least one valid version, or we got two and they match,
+//         then we found a valid configuration.*/
+//      if(ur_version>=0){
+//        if(dl_version>=0&&dl_version!=ur_version)continue;
+//      }
+//      else if(dl_version<0)continue;
+//      else ur_version=dl_version;
     }
+
+      //LOGD("ur_version > 7 : ur_version111111111111 %d", ur_version);
+      ur_version=ur.eversion[1]; //todo edit修改版本
+      ur_version = 1;//todo edit 版本1当做没有校正符. 版本设置为1不让其分块
+      //LOGD("ur_version > 7 : ur_version %d", ur_version);
     qr_finder_edge_pts_hom_classify(&ul,&hom);
     if(qr_finder_estimate_module_size_and_version(&ul,
      ur.o[0]-dl.o[0],dl.o[1]-ul.o[1])<0||
      abs(ul.eversion[1]-ur.eversion[1])>QR_SMALL_VERSION_SLACK||
      abs(ul.eversion[0]-dl.eversion[0])>QR_SMALL_VERSION_SLACK){
+        //LOGD("!!!!!!!!!!!version not match");
       continue;
     }
-    fmt_info=qr_finder_fmt_info_decode(&ul,&ur,&dl,&hom,_img,_width,_height);
-    if(fmt_info<0||
-     qr_code_decode(_qrdata,&_reader->gf,ul.c->pos,ur.c->pos,dl.c->pos,
-     ur_version,fmt_info,_img,_width,_height)<0){
+    //fmt_info=qr_finder_fmt_info_decode(&ul,&ur,&dl,&hom,_img,_width,_height); //todo check 先读功能区????
+      fmt_info=hx_finder_fmt_info_decode(&ul,&ur,&dl,&hom,_img,_width,_height);
+//      LOGD("---------------------------------------fmt_info %d" , fmt_info);
+//      LOGD("-----------------------======================ul %d %d",ul.dim[0],ul.dim[1]);
+//      LOGD("-----------------------======================ur %d %d",ur.dim[0],ur.dim[1]);
+//      LOGD("-----------------------======================dl %d %d",dl.dim[0],dl.dim[1]);
+      int dim = (ur.dim[1] + dl.dim[0]) / 2;
+      dim = FindApproxiateDimension(dim); //找到可能尺寸.
+     if(fmt_info<0|| //todo edit remove fmt_info不在这边读取format.不理解如何读取的.
+     qr_code_decode(_qrdata,&_reader->gf,ul.c->pos,ur.c->pos,dl.c->pos, //返回结果0成功.
+     ur_version,fmt_info,_img,_width,_height,dim)<0){//todo edit version.版本号,fmt info
       /*The code may be flipped.
         Try again, swapping the UR and DL centers.
         We should get a valid version either way, so it's relatively cheap to
          check this, as we've already filtered out a lot of invalid
          configurations.*/
+      /*代码可能会被翻转。
+      再试一次，交换UR和DL中心。
+      无论哪种方式，我们都应该得到一个有效的版本，所以它相对便宜
+      检查这个，因为我们已经过滤掉了很多无效的
+      配置*/
       QR_SWAP2I(hom.inv[0][0],hom.inv[1][0]);
       QR_SWAP2I(hom.inv[0][1],hom.inv[1][1]);
       QR_SWAP2I(hom.fwd[0][0],hom.fwd[0][1]);
@@ -3862,13 +4614,17 @@ static int qr_reader_try_configuration(qr_reader *_reader,
 #if defined(QR_DEBUG)
       qr_finder_dump_hom_undistorted(&ul,&dl,&ur,&hom,_img,_width,_height);
 #endif
-      fmt_info=qr_finder_fmt_info_decode(&ul,&dl,&ur,&hom,_img,_width,_height);
-      if(fmt_info<0)continue;
+//       LOGD("********************************try again1111111111");
+      //fmt_info=qr_finder_fmt_info_decode(&ul,&dl,&ur,&hom,_img,_width,_height);
+      fmt_info=hx_finder_fmt_info_decode(&ul,&dl,&ur,&hom,_img,_width,_height);
+//      LOGD("---------------------------------------try again fmt_info %d" , fmt_info);
+      if(fmt_info<0)continue; //todo edit
       QR_SWAP2I(bbox[1][0],bbox[2][0]);
       QR_SWAP2I(bbox[1][1],bbox[2][1]);
       memcpy(_qrdata->bbox,bbox,sizeof(bbox));
+//      LOGD("********************************try again2222222222 :fmt_info %d ,dim %d",fmt_info,dim);
       if(qr_code_decode(_qrdata,&_reader->gf,ul.c->pos,dl.c->pos,ur.c->pos,
-       ur_version,fmt_info,_img,_width,_height)<0){
+       ur_version,fmt_info,_img,_width,_height,dim)<0){
         continue;
       }
     }
@@ -3905,6 +4661,7 @@ void qr_reader_match_centers(qr_reader *_reader,qr_code_data_list *_qrlist,
         c[2]=_centers+k;
         version=qr_reader_try_configuration(_reader,&qrdata,
          _img,_width,_height,c);
+        //LOGD("=================================================++= version %d",version);
         if(version>=0){
           int ninside;
           int l;
