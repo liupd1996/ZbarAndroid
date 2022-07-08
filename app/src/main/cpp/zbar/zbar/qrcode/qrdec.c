@@ -14,11 +14,11 @@
 #include "binarize.h"
 #include "image.h"
 #include "svg.h"
-//#include <android/log.h>
+#include <android/log.h>
 
-//#define  TAG    "VR_CODE"
-//#define LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG,TAG,__VA_ARGS__) // 定义LOGD类型
-//#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR,TAG ,__VA_ARGS__) // 定义LOGE类型
+#define  TAG    "VR_CODE"
+#define LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG,TAG,__VA_ARGS__) // 定义LOGD类型
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR,TAG ,__VA_ARGS__) // 定义LOGE类型
 
 typedef int qr_line[3];
 
@@ -2588,8 +2588,8 @@ static int qr_finder_version_decode(qr_finder *_f,const qr_hom *_hom,
 /*Reads the format info bits near the finder modules and decodes them.*/
 /*读取finder模块附近的格式信息位并对其进行解码*/ //功能区?
 static int qr_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
- qr_finder *_dl,const qr_hom *_hom,
- const unsigned char *_img,int _width,int _height){
+                                     qr_finder *_dl,const qr_hom *_hom,
+                                     const unsigned char *_img,int _width,int _height){//todo 备用<有修改过代码
   qr_point p;
   unsigned lo[2];
   unsigned hi[2];
@@ -2622,25 +2622,25 @@ static int qr_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
   dw=_hom->fwd[2][1]*_ul->size[1];
   for(k=i=0;;i++){
     /*Skip the timing pattern row.*/
-    if(i!=6){
+    if(i!=8){
       qr_hom_fproject(p,_hom,x,y,w);
       lo[0]|=qr_img_get_bit(_img,_width,_height,p[0],p[1])<<k++;
       /*Don't advance q in the last iteration... we'll start the next loop from
          the current position.*/
-      if(i>=8)break;
     }
+    if(i>=8)break;
     x+=dx;
     y+=dy;
     w+=dw;
   }
-    char *c1;
-    c1 = malloc(16);
-    memset(c1, 0, 16);
-    if (IntegerToBinary2(lo[0], c1, 16))
-    {
-        //LOGD("bit int ================================= lo lo lo lo : %s ,integer %d", c1 ,lo[0]);
-    }
-    //LOGD("-------------------------------------------------- i %d, k %d, x %d,y %d ",i,k,x,y);
+  char *c1;
+  c1 = malloc(16);
+  memset(c1, 0, 16);
+  if (IntegerToBinary2(lo[0], c1, 16))
+  {
+    LOGD("bit int ================================= qr_finder_fmt_info_decode lo0 lo0 lo0 lo0 UL UL: %s ,integer %d", c1 ,lo[0]);
+  }
+  //LOGD("-------------------------------------------------- i %d, k %d, x %d,y %d ",i,k,x,y);
   //LOGD("-------------------------------------------------- i %d, k %d, x %d,y %d ",i,k,x,y);
   hi[0]=0;
   dx=-_hom->fwd[0][0]*_ul->size[0];
@@ -2651,18 +2651,18 @@ static int qr_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
     y+=dy;
     w+=dw;
     /*Skip the timing pattern column.*/
-    if(i!=6){
-      qr_hom_fproject(p,_hom,x,y,w);
-      hi[0]|=qr_img_get_bit(_img,_width,_height,p[0],p[1])<<k++;
-    }
+    //if(i!=6){
+    qr_hom_fproject(p,_hom,x,y,w);
+    hi[0]|=qr_img_get_bit(_img,_width,_height,p[0],p[1])<<k++;
+    //}
   }
-    char *c;
-    c = malloc(16);
-    memset(c, 0, 16);
-    if (IntegerToBinary2(hi[0], c, 16))
-    {
-        //LOGD("bit int ================================= hi hi hi hi : %s", c);
-    }
+  char *c;
+  c = malloc(16);
+  memset(c, 0, 16);
+  if (IntegerToBinary2(hi[0], c, 16))
+  {
+    LOGD("bit int ================================= qr_finder_fmt_info_decode hi0 hi0 hi0 hi0 UL UL: %s", c);
+  }
   /*Read the bits next to the UR corner.*/
   lo[1]=0;
   u=_ur->o[0]+3*_ur->size[0];
@@ -2679,6 +2679,14 @@ static int qr_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
     x+=dx;
     y+=dy;
     w+=dw;
+  }
+
+  char *c2;
+  c2 = malloc(16);
+  memset(c2, 0, 16);
+  if (IntegerToBinary2(lo[1], c2, 16))
+  {
+    LOGD("bit int ================================= qr_finder_fmt_info_decode lo1 lo1 lo1 lo1 UR UR: %s ,integer %d", c2 ,lo[1]);
   }
   /*Read the bits next to the DL corner.*/
   hi[1]=0;
@@ -2697,12 +2705,20 @@ static int qr_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
     y+=dy;
     w+=dw;
   }
+
+  char *c3;
+  c3 = malloc(16);
+  memset(c3, 0, 16);
+  if (IntegerToBinary2(hi[1], c3, 16))
+  {
+    LOGD("bit int ================================= qr_finder_fmt_info_decode hi1 hi1 hi1 hi1 DL DL: %s ,integer %d", c3 ,hi[1]);
+  }
   /*For each group of bits we have two samples... try them in all combinations
      and pick the most popular valid code, breaking ties using the number of
      bit errors.*/
-    /*对于每组位，我们有两个样本。。。尝试各种组合
-  然后选择最流行的有效代码，使用
-  位错误*/
+  /*对于每组位，我们有两个样本。。。尝试各种组合
+然后选择最流行的有效代码，使用
+位错误*/
   imax=2<<(hi[0]!=hi[1]);
   di=1+(lo[0]==lo[1]);
   nfmt_info=0;
@@ -2762,36 +2778,8 @@ static int hx_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
     int      di;
     int      i;
     int      k;
-
-/*Read the bits around the UL corner.*/
-//    hi[0]=0;
-//    u=_ul->o[0]+5*_ul->size[0];
-//    v=_ul->o[1]-3*_ul->size[1];
-//    x=_hom->fwd[0][0]*u+_hom->fwd[0][1]*v;
-//    y=_hom->fwd[1][0]*u+_hom->fwd[1][1]*v;
-//    w=_hom->fwd[2][0]*u+_hom->fwd[2][1]*v+_hom->fwd22;
-//    dx=_hom->fwd[0][1]*_ul->size[1];
-//    dy=_hom->fwd[1][1]*_ul->size[1];
-//    dw=_hom->fwd[2][1]*_ul->size[1];
-//    k=15;i=7;
-//    while(i-->0){
-//        qr_hom_fproject(p,_hom,x,y,w);
-//        hi[0]|=qr_img_get_bit(_img,_width,_height,p[0],p[1])<<k--;
-//        x+=dx;
-//        y+=dy;
-//        w+=dw;
-//    }
-//    char *c;
-//    c = malloc(16);
-//    memset(c, 0, 16);
-//    if (IntegerToBinary2(hi[0], c, 16))
-//    {
-//        LOGD("bit int ================================= hi hi hi hi : %s", c);
-//    }
-//    LOGD("====================================qr_img_get_bit %d" , qr_img_get_bit(_img,_width,_height,p[0],p[1]));
-//
-
-    lo[0]=0;
+    // bch 功能区获取.
+    hi[0]=0;
     u=_ul->o[0]+5*_ul->size[0];
     v=_ul->o[1]-3*_ul->size[1];
     x=_hom->fwd[0][0]*u+_hom->fwd[0][1]*v;
@@ -2804,7 +2792,7 @@ static int hx_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
         /*Skip the timing pattern row.*/
         //if(i!=6){
         qr_hom_fproject(p,_hom,x,y,w);
-        lo[0]|=qr_img_get_bit(_img,_width,_height,p[0],p[1])<<k++;
+        hi[0]|=qr_img_get_bit(_img,_width,_height,p[0],p[1])<<k++;
         /*Don't advance q in the last iteration... we'll start the next loop from
            the current position.*/
         if(i>=8)break;
@@ -2816,25 +2804,25 @@ static int hx_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
     int tmp = 0;
     int index = 1;
     for(i = 0; i < 8; i++) {//第一位不要，多移一位
-        tmp |= (index & lo[0]);
+        tmp |= (index & hi[0]);
         if (i != 7) {
             tmp <<=1;
-            lo[0] >>=1;
+            hi[0] >>=1;
         }
     }
-    lo[0] = tmp;
-    lo[0] &= 0x7f;//&01111111将最高位设置为0
-    lo[0] <<= 8;
-    char *c1;
-    c1 = malloc(16);
-    memset(c1, 0, 16);
-    if (IntegerToBinary2(lo[0], c1, 16))
-    {
-        //LOGD("bit int ================================= lo lo lo lo : %s ,integer %d", c1 ,lo[0]);
-    }
+    hi[0] = tmp;
+    hi[0] &= 0x7f;//&01111111将最高位设置为0
+    hi[0] <<= 8;
+//    char *c1;
+//    c1 = malloc(16);
+//    memset(c1, 0, 16);
+//    if (IntegerToBinary2(hi[0], c1, 16))
+//    {
+//        LOGD("bit int ================================= hi hi hi hi : %s ,integer %d", c1 ,lo[0]);
+//    }
     //LOGD("-------------------------------------------------- i %d, k %d, x %d,y %d ",i,k,x,y);
     //LOGD("-------------------------------------------------- i %d, k %d, x %d,y %d ",i,k,x,y);
-    hi[0]=0;
+    lo[0]=0;
     dx=-_hom->fwd[0][0]*_ul->size[0];
     dy=-_hom->fwd[1][0]*_ul->size[0];
     dw=-_hom->fwd[2][0]*_ul->size[0];
@@ -2846,35 +2834,35 @@ static int hx_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
         /*Skip the timing pattern column.*/
         //if(i!=6){
         qr_hom_fproject(p,_hom,x,y,w);
-        hi[0]|=qr_img_get_bit(_img,_width,_height,p[0],p[1])<<k++;
+        lo[0]|=qr_img_get_bit(_img,_width,_height,p[0],p[1])<<k++;
         //}
     }
-    hi[0]>>=8;
-    char *c;
-    c = malloc(16);
-    memset(c, 0, 16);
-    if (IntegerToBinary2(hi[0], c, 16))
-    {
-//        LOGD("bit int ================================= hi hi hi hi : %s", c);
-    }
+    lo[0]>>=8;
+//    char *c;
+//    c = malloc(16);
+//    memset(c, 0, 16);
+//    if (IntegerToBinary2(lo[0], c, 16))
+//    {
+//        LOGD("bit int ================================= lo lo lo lo : %s", c);
+//    }
     unsigned format = hi[0] | lo[0];
-
-    char *fmt;
-    fmt = malloc(16);
-    memset(fmt, 0, 16);
-    if (IntegerToBinary2(format, fmt, 16))
-    {
-        //LOGD("bit int ================================= fmt fmt fmt fmt : %s", fmt);
-    }
-    //LOGD("---------------------------------------fmt:%s , format:%d",fmt,format);
+//    char *fmt;
+//    fmt = malloc(16);
+//    memset(fmt, 0, 16);
+//    if (IntegerToBinary2(format, fmt, 16))
+//    {
+//        LOGD("bit int ================================= fmt fmt fmt fmt : %s", fmt);
+//    }
+//    LOGD("---------------------------------------fmt:%s , format:%d",fmt,format);
     //将二维码的功能区高8位与低8位互换。并且改变bit顺序.
     int ret = bch15_5_correct(&format);
     //LOGD("-----------------------------------------bch15_5_correct ret%d" , ret);
-    if (ret < 0) {
-        return ret;//纠错失败返回负数
-    } else {
-        return format;
-    }
+//    if (ret < 0) {
+//        return ret;//纠错失败返回负数
+//    } else {
+//        return format;
+//    }
+    return format;
     //return nerrs[besti]<4?fmt_info[besti]:-1;
 }
 
@@ -3338,7 +3326,7 @@ static void qr_data_mask_fill(unsigned *_mask,int _dim,int _pattern){
   }
 }
 
-int AppendBit(int* val, int bit) {
+int AppendBit(uint8_t* val, int bit) {
   *val <<= 1;
   *val |= bit;
   return *val;
@@ -3488,7 +3476,7 @@ static void ReadCodewords(int dim, uint8_t * resultBytes, unsigned *_data_bits,i
 }
 
 static void qr_sampling_grid_sample(const qr_sampling_grid *_grid,
- unsigned *_data_bits,int _dim,int _fmt_info,
+ unsigned *_data_bits,int _dim,int mask,
  const unsigned char *_img,int _width,int _height){
   int stride;
   int u0;
@@ -3500,7 +3488,7 @@ static void qr_sampling_grid_sample(const qr_sampling_grid *_grid,
   将它们从图像中移除，而不是在单独的步骤中揭穿*/
 
   //qr_data_mask_fill(_data_bits,_dim,_fmt_info&7);//掩模 //todo edit
-  qr_data_mask_fill(_data_bits,_dim,(_fmt_info >> 10)&0x7);//掩模 //todo edit
+  qr_data_mask_fill(_data_bits,_dim,mask);//掩模 //todo edit
 
   stride=_dim+QR_INT_BITS-1>>QR_INT_LOGBITS;
   //LOGD("*********stride %d, _dim %d ",stride,_dim);
@@ -4210,13 +4198,19 @@ static int qr_code_decode(qr_code_data *_qrdata,const rs_gf256 *_gf,
 //    LOGD("stride :%d",stride);
 
   //int       fmt_info;
-  qr_sampling_grid_sample(&grid,data_bits,dim,_fmt_info,_img,_width,_height); //todo edit划分网格
+    int ret_fmt = bch15_5_correct(&_fmt_info);
+    int errLevel = 0 , mask = 0;
+    if (ret_fmt < 0) {
+        mask = _fmt_info & 0x7;
+        errLevel = (_fmt_info >> 3) & 0x2;
+    } else{
+        int info = _fmt_info >> 10;
+        errLevel = (info & 0x18) >> 3;
+        mask = info & 0x7;
+    }
+    qr_sampling_grid_sample(&grid,data_bits,dim,mask,_img,_width,_height); //todo edit划分网格
 //  LOGD("****************************** fmt_info fmt_info %d" ,_fmt_info);
-    int info = _fmt_info >> 10;
-    int errLevel = 0, mask = 0;
-    errLevel = (info & 0x18) >> 3;
-    mask = info & 0x3;
-
+    LOGD("-------------------------------------errLevel = %d , mask = %d" , errLevel, mask);
     int versionNumber = GetVersionNum(dim);
     int totalBytes = (dim - 18) * 4;
     int totalDataBytes = GetTotalCodeWords(errLevel, versionNumber)*2;
