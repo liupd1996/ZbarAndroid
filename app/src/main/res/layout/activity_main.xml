@@ -15,5 +15,6 @@
         android:textAlignment="center"
         android:id="@+id/scan_text"
         android:background="#bb000000"
-        android:textColor="#fff" />
+        android:textColor="#fff"
+        android:textIsSelectable="true"/>
 </FrameLayout>

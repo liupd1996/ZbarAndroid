@@ -241,6 +241,7 @@ static int GetTotalCodeWords(int errLevel, int versionNumber)
 }
 
 static int GetVersionNum(int dim) {//todo 修改。暂用
+  LOGD("--------------GetVersionNum dim = %d : ",dim);
     return (dim - 50)/8;
 }
 
@@ -2811,7 +2812,7 @@ static int hx_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
         }
     }
     hi[0] = tmp;
-    hi[0] &= 0x7f;//&01111111将最高位设置为0
+//    hi[0] &= 0x7f;//&01111111将最高位设置为0 //todo 这边先不把最高位设置为0
     hi[0] <<= 8;
 //    char *c1;
 //    c1 = malloc(16);
@@ -2846,16 +2847,16 @@ static int hx_finder_fmt_info_decode(qr_finder *_ul,qr_finder *_ur,
 //        LOGD("bit int ================================= lo lo lo lo : %s", c);
 //    }
     unsigned format = hi[0] | lo[0];
-//    char *fmt;
-//    fmt = malloc(16);
-//    memset(fmt, 0, 16);
-//    if (IntegerToBinary2(format, fmt, 16))
-//    {
-//        LOGD("bit int ================================= fmt fmt fmt fmt : %s", fmt);
-//    }
+    char *fmt;
+    fmt = malloc(16);
+    memset(fmt, 0, 16);
+    if (IntegerToBinary2(format, fmt, 16))
+    {
+        LOGD("bit int ================================= fmt fmt fmt fmt : %s", fmt);
+    }
 //    LOGD("---------------------------------------fmt:%s , format:%d",fmt,format);
     //将二维码的功能区高8位与低8位互换。并且改变bit顺序.
-    int ret = bch15_5_correct(&format);
+//    int ret = bch15_5_correct(&format);
     //LOGD("-----------------------------------------bch15_5_correct ret%d" , ret);
 //    if (ret < 0) {
 //        return ret;//纠错失败返回负数
@@ -4198,20 +4199,27 @@ static int qr_code_decode(qr_code_data *_qrdata,const rs_gf256 *_gf,
 //    LOGD("stride :%d",stride);
 
   //int       fmt_info;
-    int ret_fmt = bch15_5_correct(&_fmt_info);
+    int hi = (_fmt_info >> 8);
+    int lo = (_fmt_info & 0xFF);
+    //LOGD("-----------------------------hi = %d ,lo = %d" ,hi,lo);
     int errLevel = 0 , mask = 0;
-    if (ret_fmt < 0) {
+    if (hi == lo) {//判断是否为旧版本回形码，不带bch纠错
         mask = _fmt_info & 0x7;
-        errLevel = (_fmt_info >> 3) & 0x2;
-    } else{
+        errLevel = (_fmt_info >> 3) & 0x3;
+    } else {
+        _fmt_info &= 0x7FFF;//最高位设置为0;
+        int ret_fmt = bch15_5_correct(&_fmt_info);
+        if (ret_fmt < 0) {
+            return -1;
+        }
         int info = _fmt_info >> 10;
         errLevel = (info & 0x18) >> 3;
         mask = info & 0x7;
     }
     qr_sampling_grid_sample(&grid,data_bits,dim,mask,_img,_width,_height); //todo edit划分网格
 //  LOGD("****************************** fmt_info fmt_info %d" ,_fmt_info);
-    LOGD("-------------------------------------errLevel = %d , mask = %d" , errLevel, mask);
     int versionNumber = GetVersionNum(dim);
+//    LOGD("-------------------------------------errLevel = %d , mask = %d，versionNumber = %d" , errLevel, mask, versionNumber);
     int totalBytes = (dim - 18) * 4;
     int totalDataBytes = GetTotalCodeWords(errLevel, versionNumber)*2;
     uint8_t *resultBytes;
@@ -4575,7 +4583,7 @@ static int qr_reader_try_configuration(qr_reader *_reader,
     }
     //fmt_info=qr_finder_fmt_info_decode(&ul,&ur,&dl,&hom,_img,_width,_height); //todo check 先读功能区????
       fmt_info=hx_finder_fmt_info_decode(&ul,&ur,&dl,&hom,_img,_width,_height);
-//      LOGD("---------------------------------------fmt_info %d" , fmt_info);
+      LOGD("---------------------------------------fmt_info %d" , fmt_info);
 //      LOGD("-----------------------======================ul %d %d",ul.dim[0],ul.dim[1]);
 //      LOGD("-----------------------======================ur %d %d",ur.dim[0],ur.dim[1]);
 //      LOGD("-----------------------======================dl %d %d",dl.dim[0],dl.dim[1]);

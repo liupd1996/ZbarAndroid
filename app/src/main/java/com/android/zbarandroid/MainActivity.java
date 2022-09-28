@@ -71,7 +71,9 @@ public class MainActivity extends Activity {
                     scanText.setText("Cannot use camera");
                     return false;
                 }
-
+                Camera.Parameters parameters = camera.getParameters();
+                parameters.setZoom(17);
+                camera.setParameters(parameters);
                 if(cameraPreview == null)
                 {
                     autoFocusHandler = new Handler();
